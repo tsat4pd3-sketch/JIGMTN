@@ -418,7 +418,8 @@ function HomeScreen({records, onOpen, onHistory, loading, saveStatus, hasToken})
       </div>
       <div style={S.wrap}>
         {loading && <div style={{textAlign:'center',padding:40,color:'#64748b',fontSize:12}}>⏳ กำลังโหลดข้อมูลจาก GitHub...</div>}
-        {!loading && <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:14}}>
+        {!loading && <>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:14}}>
           {[['PM ทั้งหมด',records.length,'#1e3a5f'],['เดือนนี้',thisMonth,'#1a3a2a'],['NG',ngCount,ngCount>0?'#3a1a1a':'#1e293b']].map(([t,v,bg])=>(
             <div key={t} style={{...S.card,background:bg,textAlign:'center',padding:'14px 10px'}}>
               <div style={{fontSize:10,color:c.muted}}>{t}</div>
@@ -457,9 +458,9 @@ function HomeScreen({records, onOpen, onHistory, loading, saveStatus, hasToken})
           </div>
         ))}
       </div>
-    </div>
     </>}
-</div>
+    </div>
+  );
 }
 
 /* ============================================================ HISTORY ============================================================ */
