@@ -302,7 +302,6 @@ const CheckCell = ({val, onChange}) => (
   </div>
 );
 
-/* ============================================================ CALC ============================================================ */
 const calcAvg = (data, key) => {
   const nums=[data[`${key}_1`],data[`${key}_2`],data[`${key}_3`]].map(parseFloat).filter(n=>!isNaN(n));
   return nums.length ? (nums.reduce((a,b)=>a+b,0)/nums.length).toFixed(2) : '';
@@ -431,15 +430,17 @@ function HomeScreen({records, onOpen, onHistory, loading, saveStatus, hasToken, 
       </div>
       <div style={S.wrap}>
         {loading && <div style={{textAlign:'center',padding:40,color:'#64748b',fontSize:12}}>⏳ กำลังโหลดข้อมูลจาก GitHub...</div>}
-        {!loading && <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:14}}>
-          {[['PM ทั้งหมด',records.length,'#0d0d0d','#ff6a00'],['เดือนนี้',thisMonth,'#0d0d0d','#2f7d32'],['NG',ngCount,ngCount>0?'#c8201d':'#0d0d0d','#ff6a00']].map(([t,v,bg,fg])=>(
-            <div key={t} style={{...S.card,background:bg,textAlign:'center',padding:'18px 10px',borderRadius:0,border:'none'}}>
-              <div style={{fontSize:10,color:'#cbd5e1',fontFamily:"'JetBrains Mono', monospace",letterSpacing:'0.08em',textTransform:'uppercase',fontWeight:700}}>{t}</div>
-              <div style={{fontSize:32,fontWeight:700,color:fg,fontFamily:"'JetBrains Mono', monospace",lineHeight:1,marginTop:4}}>{v}</div>
-            </div>
-          ))}
-        </div>
-        {[{label:'JHYD06 — Hydraulic JIG',jigs:JIG_LIST.filter(j=>j.id.startsWith('JHYD'))},{label:'GPHYD06 — Gripper Transfer',jigs:JIG_LIST.filter(j=>j.id.startsWith('GP'))}].map(grp=>(
+        {!loading && (
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:14}}>
+            {[['PM ทั้งหมด',records.length,'#0d0d0d','#ff6a00'],['เดือนนี้',thisMonth,'#0d0d0d','#2f7d32'],['NG',ngCount,ngCount>0?'#c8201d':'#0d0d0d','#ff6a00']].map(([t,v,bg,fg])=>(
+              <div key={t} style={{...S.card,background:bg,textAlign:'center',padding:'18px 10px',borderRadius:0,border:'none'}}>
+                <div style={{fontSize:10,color:'#cbd5e1',fontFamily:"'JetBrains Mono', monospace",letterSpacing:'0.08em',textTransform:'uppercase',fontWeight:700}}>{t}</div>
+                <div style={{fontSize:32,fontWeight:700,color:fg,fontFamily:"'JetBrains Mono', monospace",lineHeight:1,marginTop:4}}>{v}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {!loading && [{label:'JHYD06 — Hydraulic JIG',jigs:JIG_LIST.filter(j=>j.id.startsWith('JHYD'))},{label:'GPHYD06 — Gripper Transfer',jigs:JIG_LIST.filter(j=>j.id.startsWith('GP'))}].map(grp=>(
           <div key={grp.label} style={S.card}>
             <div style={S.cTitle}>{grp.label}</div>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:8}}>
