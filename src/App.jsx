@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import JIG_DIAGRAMS from "./diagrams.js";
 import { loadRecords, createRecord, updateRecord, deleteRecord, checkAuth } from "./db.js";
 /* ============================================================
@@ -302,6 +302,12 @@ const CheckCell = ({val, onChange}) => (
   </div>
 );
 
+/* ============================================================ CALC ============================================================ */
+const calcAvg = (data, key) => {
+  const nums=[data[`${key}_1`],data[`${key}_2`],data[`${key}_3`]].map(parseFloat).filter(n=>!isNaN(n));
+  return nums.length ? (nums.reduce((a,b)=>a+b,0)/nums.length).toFixed(2) : '';
+};
+
 /* ============================================================ MAIN APP ============================================================ */
 export { JIG_LIST };
 export default function PMApp({ session, onLogout, onNavigate }) {
@@ -390,19 +396,14 @@ export default function PMApp({ session, onLogout, onNavigate }) {
     setPrinting(false);
   };
 
-  if(screen==='home')    return <HomeScreen records={records} onOpen={openForm} onHistory={()=>setScreen('history')} loading={loading} saveStatus={saveStatus} hasToken={hasToken} />;
+  if(screen==='home')    return <HomeScreen records={records} onOpen={openForm} onHistory={()=>setScreen('history')} loading={loading} saveStatus={saveStatus} hasToken={hasToken} session={session} onLogout={onLogout} onNavigate={onNavigate} />;
   if(screen==='history') return <HistoryScreen records={records} filter={hFilter} setFilter={setHFilter} onBack={()=>setScreen('home')} onEdit={rec=>{const j=JIG_LIST.find(j=>j.id===rec.jigId);openForm(j,rec);}} onPrint={handlePrint} printing={printing} onDelete={(id,issueNum)=>{ const recs=records.filter(r=>r.id!==id); save(recs, null, true, issueNum); }} />;
   if(screen==='form')    return <FormScreen jig={selJig} record={editRec} setRecord={setEditRec} onSave={handleSave} onBack={()=>setScreen('home')} onPrint={handlePrint} printing={printing} />;
   return null;
 }
 
-const calcAvg = (data, key) => {
-  const nums=[data[`${key}_1`],data[`${key}_2`],data[`${key}_3`]].map(parseFloat).filter(n=>!isNaN(n));
-  return nums.length ? (nums.reduce((a,b)=>a+b,0)/nums.length).toFixed(2) : '';
-};
-
 /* ============================================================ HOME ============================================================ */
-function HomeScreen({records, onOpen, onHistory, loading, saveStatus, hasToken}) {
+function HomeScreen({records, onOpen, onHistory, loading, saveStatus, hasToken, session, onLogout, onNavigate}) {
   const thisMonth = records.filter(r=>r.pmDate?.slice(0,7)===today().slice(0,7)).length;
   const ngCount   = records.filter(r=>r.overallResult==='NG').length;
   return (
@@ -437,8 +438,8 @@ function HomeScreen({records, onOpen, onHistory, loading, saveStatus, hasToken})
               <div style={{fontSize:32,fontWeight:700,color:fg,fontFamily:"'JetBrains Mono', monospace",lineHeight:1,marginTop:4}}>{v}</div>
             </div>
           ))}
-        </div>}
-        {!loading && [{label:'JHYD06 — Hydraulic JIG',jigs:JIG_LIST.filter(j=>j.id.startsWith('JHYD'))},{label:'GPHYD06 — Gripper Transfer',jigs:JIG_LIST.filter(j=>j.id.startsWith('GP'))}].map(grp=>(
+        </div>
+        {[{label:'JHYD06 — Hydraulic JIG',jigs:JIG_LIST.filter(j=>j.id.startsWith('JHYD'))},{label:'GPHYD06 — Gripper Transfer',jigs:JIG_LIST.filter(j=>j.id.startsWith('GP'))}].map(grp=>(
           <div key={grp.label} style={S.card}>
             <div style={S.cTitle}>{grp.label}</div>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:8}}>
@@ -469,7 +470,6 @@ function HomeScreen({records, onOpen, onHistory, loading, saveStatus, hasToken})
           </div>
         ))}
       </div>
-    </div>
     </div>
   );
 }
@@ -619,20 +619,20 @@ function LPSimple({sec, data, remarks, upd, updR}) {
           const k2=r2?`${sec.id}_${r2.id}`:'', v2=r2?data[k2]:'', j2=r2?judgeLP(v2,r2.max,r2.min):'';
           return (
             <tr key={ri} style={{background:ri%2===0?'#0f172a':'#111827'}}>
-              {[{item,k:k1,v:v1,j:j1,n:ri+1},{item:r2,k:k2,v:v2,j:j2,n:ri+half+1}].map((col,ci)=>col.item?(<>
-                <td key={`${ci}a`} style={S.td()}>{col.n}</td>
-                <td key={`${ci}b`} style={{...S.td(),textAlign:'left',whiteSpace:'nowrap',fontSize:8.5}}>{col.item.id}</td>
-                <td key={`${ci}c`} style={S.td()}>{col.item.nom}</td>
-                <td key={`${ci}d`} style={S.td()}>{col.item.max}</td>
-                <td key={`${ci}e`} style={S.td()}>{col.item.min}</td>
-                <td key={`${ci}f`} style={S.td(col.j==='NG')}>
+              {[{item,k:k1,v:v1,j:j1,n:ri+1},{item:r2,k:k2,v:v2,j:j2,n:ri+half+1}].map((col,ci)=>col.item?(<Fragment key={ci}>
+                <td style={S.td()}>{col.n}</td>
+                <td style={{...S.td(),textAlign:'left',whiteSpace:'nowrap',fontSize:8.5}}>{col.item.id}</td>
+                <td style={S.td()}>{col.item.nom}</td>
+                <td style={S.td()}>{col.item.max}</td>
+                <td style={S.td()}>{col.item.min}</td>
+                <td style={S.td(col.j==='NG')}>
                   <input style={{width:52,background:'transparent',border:'none',textAlign:'center',color:col.j==='NG'?c.ng:c.text,fontSize:9.5}} value={col.v||''} onChange={e=>upd(col.k,e.target.value)} />
                 </td>
-                <td key={`${ci}g`} style={S.td()}><span style={col.j?S.tag(col.j):{color:c.muted,fontSize:9}}>{col.j||'—'}</span></td>
-                <td key={`${ci}h`} style={S.td(col.j==='NG')}>
+                <td style={S.td()}><span style={col.j?S.tag(col.j):{color:c.muted,fontSize:9}}>{col.j||'—'}</span></td>
+                <td style={S.td(col.j==='NG')}>
                   {col.j==='NG'&&<input style={{width:90,background:'transparent',border:`1px solid ${c.ngBorder}`,borderRadius:3,padding:'1px 4px',color:c.ng,fontSize:8.5}} value={remarks[col.k]||''} onChange={e=>updR(col.k,e.target.value)} placeholder="Action..." />}
                 </td>
-              </>):Array.from({length:8},(_,x)=><td key={`${ci}${x}`} style={{...S.td(),background:'transparent',border:`1px solid ${c.border}30`}}></td>))}
+              </Fragment>):Array.from({length:8},(_,x)=><td key={`${ci}${x}`} style={{...S.td(),background:'transparent',border:`1px solid ${c.border}30`}}></td>))}
             </tr>
           );
         })}
