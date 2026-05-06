@@ -469,7 +469,7 @@ function HomeScreen({records, onOpen, onHistory, loading, saveStatus, hasToken})
           </div>
         ))}
       </div>
-    </div>}
+    </div>
     </div>
   );
 }
