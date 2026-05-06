@@ -437,8 +437,8 @@ function HomeScreen({records, onOpen, onHistory, loading, saveStatus, hasToken})
               <div style={{fontSize:32,fontWeight:700,color:fg,fontFamily:"'JetBrains Mono', monospace",lineHeight:1,marginTop:4}}>{v}</div>
             </div>
           ))}
-        </div>
-        {[{label:'JHYD06 — Hydraulic JIG',jigs:JIG_LIST.filter(j=>j.id.startsWith('JHYD'))},{label:'GPHYD06 — Gripper Transfer',jigs:JIG_LIST.filter(j=>j.id.startsWith('GP'))}].map(grp=>(
+        </div>}
+        {!loading && [{label:'JHYD06 — Hydraulic JIG',jigs:JIG_LIST.filter(j=>j.id.startsWith('JHYD'))},{label:'GPHYD06 — Gripper Transfer',jigs:JIG_LIST.filter(j=>j.id.startsWith('GP'))}].map(grp=>(
           <div key={grp.label} style={S.card}>
             <div style={S.cTitle}>{grp.label}</div>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:8}}>
