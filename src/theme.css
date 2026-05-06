@@ -1,0 +1,37 @@
+/* PM JIG v2 — industrial hi-vis theme overrides */
+:root {
+  --hi: #ff6a00;
+  --hi-2: #ffb000;
+  --ok: #2f7d32;
+  --ng: #c8201d;
+  --ink: #0d0d0d;
+  --paper: #f4f1ea;
+  --line: #d8d4cc;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Sarabun:wght@400;500;600;700&display=swap');
+
+body {
+  font-family: 'Inter', 'Sarabun', system-ui, sans-serif;
+}
+
+.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.thai { font-family: 'Sarabun', system-ui, sans-serif; }
+
+.kicker {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: #6b6b6b;
+}
+
+.hazard {
+  background-image: repeating-linear-gradient(-45deg, #ff6a00 0 14px, #0d0d0d 14px 28px);
+}
+
+.pill-v2 {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 2px 7px; border: 1.5px solid currentColor; border-radius: 2px;
+}
