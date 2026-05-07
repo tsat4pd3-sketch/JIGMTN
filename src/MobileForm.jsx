@@ -192,15 +192,29 @@ export default function MobileForm({ jig, session, plan, onSubmit, onCancel, dia
     let count = 0;
     sections.forEach(s => {
       const sd = data[s.id] || {};
-      Object.values(sd).forEach(v => {
+      Object.entries(sd).forEach(([itId, v]) => {
         if (v === 'NG') count++;
-        if (v?.shots) {
-          const nums = v.shots.map(x=>parseFloat(x)).filter(x=>!isNaN(x));
+        if (s.type === 'locatepin_xy') {
+          const item = s.items.find(i => i.id === itId);
+          if (item) {
+            ['X', 'Y'].forEach(axis => {
+              const axisVal = v?.[axis];
+              if (!axisVal?.shots) return;
+              const nums = axisVal.shots.map(x => parseFloat(x)).filter(x => !isNaN(x));
+              if (nums.length === 3) {
+                const avg = nums.reduce((a, b) => a + b, 0) / 3;
+                if (judgeLP(avg, item.max, item.min) === 'NG') count++;
+              }
+            });
+          }
+        } else if (v?.shots) {
+          const nums = v.shots.map(x => parseFloat(x)).filter(x => !isNaN(x));
           if (nums.length === 3) {
-            const avg = nums.reduce((a,b)=>a+b,0)/3;
-            if (s.type === 'feeler' && judgeSD(avg)==='NG') count++;
-            if ((s.type==='locatepin_simple') && s.items.find(i=>v===v)) {
-              // can't easily map back; skip
+            const avg = nums.reduce((a, b) => a + b, 0) / 3;
+            if (s.type === 'feeler' && judgeSD(avg) === 'NG') count++;
+            if (s.type === 'locatepin_simple') {
+              const item = s.items.find(i => i.id === itId);
+              if (item && judgeLP(avg, item.max, item.min) === 'NG') count++;
             }
           }
         }
