@@ -1,6 +1,7 @@
 /* MobileHome — industrial hi-vis status board (mobile) */
 
 import { useMemo } from 'react';
+import { derivePlanStatus, daysUntilDue } from './pmPlan.js';
 
 const c = { ink:'#0d0d0d', hi:'#ff6a00', paper:'#f4f1ea', line:'#d8d4cc', ng:'#c8201d', ok:'#2f7d32', amber:'#ffb000', steel:'#6b6b6b' };
 
@@ -13,7 +14,7 @@ const Sparkbars = ({ values, max=8, height=18, accent=c.ink, threshold=6 }) => (
   </div>
 );
 
-export default function MobileHome({ session, jigList, records, onLogout, onNavigate, onPickJig, onHistory, hasToken, saveStatus }) {
+export default function MobileHome({ session, jigList, records, plans = [], onLogout, onNavigate, onPickJig, onHistory, hasToken, saveStatus }) {
   const { stats, jigData } = useMemo(() => {
     const now = Date.now();
     const data = jigList.map(j => {
@@ -43,6 +44,12 @@ export default function MobileHome({ session, jigList, records, onLogout, onNavi
     };
     return { stats, jigData: data };
   }, [jigList, records]);
+
+  const assignedPlans = useMemo(() => plans
+    .map(p => ({ ...p, statusView: derivePlanStatus(p), jig: jigList.find(j => j.id === p.jigId) }))
+    .filter(p => p.statusView !== 'completed' && (!p.assignedToEmp || p.assignedToEmp === session?.emp || ['engineer','supervisor','admin'].includes(session?.role)))
+    .sort((a,b) => `${a.dueDate}`.localeCompare(`${b.dueDate}`))
+    .slice(0, 6), [plans, jigList, session]);
 
   const now = new Date();
   const time = now.toTimeString().slice(0,5);
@@ -116,21 +123,50 @@ export default function MobileHome({ session, jigList, records, onLogout, onNavi
       </div>
 
       {/* Token warning */}
-      {!hasToken && (
+      {!hasToken?.ok && (
         <div style={{ margin:'0 12px 8px', padding:'8px 10px', background:'#fbe7e6', border:`1.5px solid ${c.ng}`, color:c.ng, fontSize:11, fontWeight:600 }}>
-          ⚠ Token ไม่ได้ตั้งค่า — ข้อมูลเก็บใน device เท่านั้น
+          ⚠ ไม่ได้เชื่อม SQL API/GitHub — ข้อมูลอาจอยู่ใน device สำหรับเดโม
         </div>
       )}
 
       {/* Quick nav row */}
       <div style={{ padding:'0 12px 8px', display:'flex', gap:6, flexWrap:'wrap' }}>
         <button onClick={onHistory} style={navBtn(false)}>📋 ประวัติ</button>
-        {['supervisor','admin'].includes(session?.role) && (
+        {['engineer','supervisor','admin'].includes(session?.role) && (
           <button onClick={()=>onNavigate('dashboard')} style={navBtn(true)}>📊 Dashboard</button>
         )}
+        {['engineer','supervisor','admin'].includes(session?.role) && (
+          <button onClick={()=>onNavigate('planning')} style={navBtn(false)}>🗓 PM Plan</button>
+        )}
         <button onClick={()=>onNavigate('calibration')} style={navBtn(false)}>🔧 Cal</button>
+        {['supervisor','admin'].includes(session?.role) && <button onClick={()=>onNavigate('jigConfig')} style={navBtn(false)}>🧩 JIG Config</button>}
         {session?.role==='admin' && <button onClick={()=>onNavigate('admin')} style={navBtn(false)}>⚙ Admin</button>}
       </div>
+
+      {/* Assigned PM plans */}
+      {assignedPlans.length > 0 && (
+        <div style={{ margin:'0 12px 10px', background:'#fff', border:`2px solid ${c.ink}` }}>
+          <div style={{ padding:'8px 10px', background:c.ink, color:c.hi, fontFamily:'JetBrains Mono', fontSize:10, fontWeight:800, letterSpacing:'0.08em' }}>
+            TODAY PM PLAN · งานตามแผน ({assignedPlans.length})
+          </div>
+          {assignedPlans.map(p => {
+            const days = daysUntilDue(p);
+            return <button key={p.id} onClick={()=>p.jig && onPickJig(p.jig, p)} style={{
+              width:'100%', border:'none', borderBottom:`1px solid ${c.line}`, background:p.statusView==='overdue'?'#fff0f0':'#fff',
+              padding:'10px', display:'grid', gridTemplateColumns:'1fr auto', gap:8, textAlign:'left', cursor:'pointer',
+            }}>
+              <div>
+                <div className="mono" style={{ fontSize:11, fontWeight:800 }}>{p.jigId} · {p.jigName || p.jig?.name}</div>
+                <div className="thai" style={{ fontSize:11, color:c.steel }}>{p.engineerNote || 'ตรวจตามมาตรฐาน PM'}</div>
+                <div className="mono" style={{ fontSize:9, color:c.steel }}>DUE {p.dueDate} · {p.frequency} · {p.priority}</div>
+              </div>
+              <span className="pill-v2" style={{ alignSelf:'start', color:p.statusView==='overdue'?c.ng:c.hi }}>
+                {days === 0 ? 'TODAY' : days < 0 ? `${Math.abs(days)}D LATE` : `${days}D`}
+              </span>
+            </button>;
+          })}
+        </div>
+      )}
 
       {/* Jig list */}
       <div style={{ background:'#fff', borderTop:`2px solid ${c.ink}` }}>

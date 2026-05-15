@@ -11,12 +11,13 @@ const SESSION_KEY = 'pm_jig_session_v2';
 const ROSTER_KEY = 'pm_jig_roster_v2';
 
 const DEFAULT_ROSTER = [
-  { emp: 'EMP-04821', name: 'สมชาย ค.', pin: '1234', role: 'inspector', shift: 'A' },
-  { emp: 'EMP-03914', name: 'อนุชา ส.', pin: '1234', role: 'inspector', shift: 'A' },
-  { emp: 'EMP-05102', name: 'วิชัย ม.', pin: '1234', role: 'inspector', shift: 'B' },
-  { emp: 'EMP-02011', name: 'ธนวัฒน์ ป.', pin: '1234', role: 'inspector', shift: 'C' },
-  { emp: 'SUP-001',   name: 'หัวหน้า A.', pin: '9999', role: 'supervisor', shift: 'A' },
-  { emp: 'ADM-001',   name: 'IT Admin',   pin: '0000', role: 'admin', shift: '-' },
+  { emp: 'TECH-04821', name: 'สมชาย ค.', pin: '1234', role: 'technician', shift: 'A' },
+  { emp: 'TECH-03914', name: 'อนุชา ส.', pin: '1234', role: 'technician', shift: 'A' },
+  { emp: 'TECH-05102', name: 'วิชัย ม.', pin: '1234', role: 'technician', shift: 'B' },
+  { emp: 'TECH-02011', name: 'ธนวัฒน์ ป.', pin: '1234', role: 'technician', shift: 'C' },
+  { emp: 'ENG-001',    name: 'วิศวกร PM', pin: '2468', role: 'engineer', shift: 'A' },
+  { emp: 'SUP-001',    name: 'หัวหน้า A.', pin: '9999', role: 'supervisor', shift: 'A' },
+  { emp: 'ADM-001',    name: 'IT Admin',   pin: '0000', role: 'admin', shift: '-' },
 ];
 
 export function getRoster() {
@@ -70,12 +71,16 @@ export function logout() {
 export function can(session, action) {
   if (!session) return false;
   const matrix = {
-    'pm.create':       ['inspector', 'supervisor', 'admin'],
-    'pm.edit':         ['inspector', 'supervisor', 'admin'],
+    'pm.create':       ['technician', 'inspector', 'engineer', 'supervisor', 'admin'],
+    'pm.edit':         ['technician', 'inspector', 'engineer', 'supervisor', 'admin'],
     'pm.delete':       ['supervisor', 'admin'],
-    'dashboard.view':  ['supervisor', 'admin'],
+    'dashboard.view':  ['engineer', 'supervisor', 'admin'],
+    'planning.view':   ['engineer', 'supervisor', 'admin'],
+    'planning.edit':   ['engineer', 'supervisor', 'admin'],
+    'jigconfig.view':  ['supervisor', 'admin'],
+    'jigconfig.edit':  ['supervisor', 'admin'],
     'admin.view':      ['admin'],
-    'cal.view':        ['inspector', 'supervisor', 'admin'],
+    'cal.view':        ['technician', 'inspector', 'engineer', 'supervisor', 'admin'],
     'cal.edit':        ['supervisor', 'admin'],
   };
   return (matrix[action] || []).includes(session.role);

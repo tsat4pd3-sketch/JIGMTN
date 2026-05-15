@@ -7,7 +7,7 @@ import { useState, useMemo } from 'react';
 const c = { ink:'#0d0d0d', hi:'#ff6a00', paper:'#f4f1ea', line:'#d8d4cc', ng:'#c8201d', ok:'#2f7d32', amber:'#ffb000', steel:'#6b6b6b' };
 
 const judgeLP = (val,max,min) => { const n=parseFloat(val); if(isNaN(n)) return null; return (n>=min&&n<=max)?'OK':'NG'; };
-const judgeSD = val => { const n=parseFloat(val); if(isNaN(n)) return null; return n<0.30?'OK':'NG'; };
+const judgeSD = (val, max = 0.30) => { const n=parseFloat(val), m=parseFloat(max); if(isNaN(n)) return null; return n<(isNaN(m)?0.30:m)?'OK':'NG'; };
 
 const Kicker = ({ children, color }) => (
   <div style={{
@@ -74,12 +74,13 @@ function MeasureCard({ item, kind, axis, value, onChange }) {
   let verdict = null;
   if (avg !== null) {
     if (kind === 'lp') verdict = judgeLP(avg, item.max, item.min);
-    else if (kind === 'sd') verdict = judgeSD(avg);
+    else if (kind === 'sd') verdict = judgeSD(avg, item.max);
   }
   const allFilled = v.shots.every(s => s !== '');
 
-  const spec = kind === 'lp' ? `${item.min.toFixed(2)} → ${item.max.toFixed(2)}`
-             : kind === 'sd' ? '< 0.30'
+  const fmtSpec = (n) => Number.isFinite(Number(n)) ? Number(n).toFixed(2) : '—';
+  const spec = kind === 'lp' ? `${fmtSpec(item.min)} → ${fmtSpec(item.max)}`
+             : kind === 'sd' ? `< ${fmtSpec(item.max ?? 0.30)}`
              : '—';
   const label = `${item.id || item.label}${axis ? ' · AXIS ' + axis : ''}`;
 
@@ -162,7 +163,7 @@ function ChecklistRow({ item, value, onChange }) {
   );
 }
 
-export default function MobileForm({ jig, session, onSubmit, onCancel, diagramSrc }) {
+export default function MobileForm({ jig, session, plan, onSubmit, onCancel, diagramSrc }) {
   const [secIdx, setSecIdx] = useState(0);
   const [data, setData] = useState({});  // { [secId]: { [itemId]: ... } }
   const [remarks, setRemarks] = useState({});
@@ -192,16 +193,15 @@ export default function MobileForm({ jig, session, onSubmit, onCancel, diagramSr
     let count = 0;
     sections.forEach(s => {
       const sd = data[s.id] || {};
-      Object.values(sd).forEach(v => {
+      Object.entries(sd).forEach(([itId, v]) => {
         if (v === 'NG') count++;
         if (v?.shots) {
           const nums = v.shots.map(x=>parseFloat(x)).filter(x=>!isNaN(x));
           if (nums.length === 3) {
             const avg = nums.reduce((a,b)=>a+b,0)/3;
-            if (s.type === 'feeler' && judgeSD(avg)==='NG') count++;
-            if ((s.type==='locatepin_simple') && s.items.find(i=>v===v)) {
-              // can't easily map back; skip
-            }
+            const item = s.items.find(i => i.id === itId);
+            if (s.type === 'feeler' && judgeSD(avg, item?.max)==='NG') count++;
+            if (s.type === 'locatepin_simple' && item && judgeLP(avg, item.max, item.min)==='NG') count++;
           }
         }
       });
@@ -268,7 +268,7 @@ export default function MobileForm({ jig, session, onSubmit, onCancel, diagramSr
           const nums = val.shots.map(x=>parseFloat(x)).filter(x=>!isNaN(x));
           if (nums.length !== 3) return;
           const avg = nums.reduce((a,b)=>a+b,0)/3;
-          if (type === 'feeler' && judgeSD(avg)==='NG') overall='NG';
+          if (type === 'feeler' && judgeSD(avg, item?.max)==='NG') overall='NG';
           if (type === 'locatepin_simple' && item && judgeLP(avg, item.max, item.min)==='NG') overall='NG';
         };
         if (s.type === 'locatepin_xy') {
@@ -279,18 +279,23 @@ export default function MobileForm({ jig, session, onSubmit, onCancel, diagramSr
           const item = s.items.find(i=>i.id===itId);
           checkAvg(v, 'locatepin_simple', item);
         } else if (s.type === 'feeler') {
-          checkAvg(v, 'feeler');
+          const item = s.items.find(i=>i.id===itId);
+          checkAvg(v, 'feeler', item);
         }
       });
     });
 
     const record = {
+      id: `REC-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+      planId: plan?.id || null,
       jigId: jig.id,
       jigName: jig.name,
       pmDate: new Date().toISOString().slice(0,10),
       shift: session?.shift || 'A',
       inspector: session?.name || '',
       inspectorEmp: session?.emp || '',
+      engineerNote: plan?.engineerNote || '',
+      dueDate: plan?.dueDate || '',
       data,
       remarks,
       overallResult: overall,
@@ -306,6 +311,11 @@ export default function MobileForm({ jig, session, onSubmit, onCancel, diagramSr
         <div>
           <Kicker color={c.hi}>{jig.id} · {jig.process}</Kicker>
           <div style={{ fontSize:14, fontWeight:700 }}>{jig.name}</div>
+          {plan && (
+            <div style={{ marginTop:4, fontFamily:'JetBrains Mono', fontSize:10, color:c.hi }}>
+              PLAN {plan.id} · DUE {plan.dueDate} · {plan.priority?.toUpperCase?.() || 'NORMAL'}
+            </div>
+          )}
         </div>
         <button onClick={onCancel} style={{
           width:36, height:36, background:'transparent', border:`1.5px solid ${c.hi}`,
@@ -341,6 +351,13 @@ export default function MobileForm({ jig, session, onSubmit, onCancel, diagramSr
       )}
 
       {/* Diagram thumb */}
+      {plan?.engineerNote && (
+        <div style={{ margin:'10px 12px 0', padding:'10px 12px', background:'#fff5f0', border:`1.5px solid ${c.hi}` }}>
+          <Kicker color={c.hi}>ENGINEER INSTRUCTION · ข้อกำหนดจากวิศวกร</Kicker>
+          <div className="thai" style={{ marginTop:4, fontSize:13, lineHeight:1.45, color:c.ink }}>{plan.engineerNote}</div>
+        </div>
+      )}
+
       {diagramSrc && (
         <div style={{ padding:'10px 12px 0' }}>
           <Kicker>ENG · DRAWING / แผนผัง</Kicker>
