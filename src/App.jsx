@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import JIG_DIAGRAMS from "./diagrams.js";
 import { loadRecords, createRecord, updateRecord, deleteRecord, checkAuth } from "./db.js";
-/* ============================================================
-   JIG DATA DEFINITIONS
-   ============================================================ */
+/* JIG DATA DEFINITIONS */
 const mkLP_XY = (items) => ({ id:'lp', title:'Locate Pin (Ø -0.20) — Vernier X/Y', type:'locatepin_xy', items });
 const mkLP_S  = (items) => ({ id:'lp', title:'Locate Pin (Ø -0.20) — Vernier', type:'locatepin_simple', items });
 const mkSD = (n) => ({ id:'sd', title:'Support Datum — Feeler Gauge < 0.30 mm', type:'feeler', items: Array.from({length:n},(_,i)=>({id:`SD${i+1}`,label:`SD ${i+1}`})) });
@@ -50,13 +48,13 @@ const JIG_LIST = [
   {id:'GPHYD06-06',name:'GRIPPER TRANSFER #06',process:'ASSEMBLY',partName:'REINF ASY FRT FNDR INR BDY LH',model:'P703',partNo:'MB3B-16E061-C_113',sections:[mkLP_XY([{id:'LP1',nom:5.90,max:5.90,min:5.70},{id:'LP2',nom:7.90,max:7.90,min:7.70},{id:'LP3',nom:9.90,max:9.90,min:9.70}]),mkSD(2),mkAC(3),mkPS(2),mkSV(),mkBolt('grip')]},
 ];
 
-/* ============================================================ HELPERS ============================================================ */
+/* HELPERS */
 const today = () => new Date().toISOString().slice(0,10);
 const fmtDate = d => d ? new Date(d+'T00:00:00').toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'numeric'}) : '-';
 const judgeLP = (val,max,min) => { const n=parseFloat(val); if(isNaN(n)) return null; return (n>=min&&n<=max)?'OK':'NG'; };
 const judgeSD = val => { const n=parseFloat(val); if(isNaN(n)) return null; return n<0.30?'OK':'NG'; };
 
-/* ============================================================ PDF EXPORT — uses window.print via hidden iframe ============================================================ */
+/* PDF EXPORT — uses window.print via hidden iframe */
 const buildPrintHTML = (record, jig) => {
   const data = record.data||{};
   const remarks = record.remarks||{};
@@ -260,7 +258,7 @@ ${sectionsHTML}
 </html>`;
 };
 
-/* ============================================================ STYLES ============================================================ */
+/* STYLES */
 const c = {
   bg:'#f4f1ea', surface:'#ffffff', border:'#d8d4cc', muted:'#6b6b6b', text:'#0d0d0d',
   accent:'#ff6a00', ok:'#2f7d32', ng:'#c8201d', warn:'#ffb000',
@@ -307,7 +305,7 @@ const calcAvg = (data, key) => {
   return nums.length ? (nums.reduce((a,b)=>a+b,0)/nums.length).toFixed(2) : '';
 };
 
-/* ============================================================ MAIN APP ============================================================ */
+/* MAIN APP */
 export { JIG_LIST };
 export default function PMApp({ session, onLogout, onNavigate }) {
   const [screen, setScreen] = useState('home'); // home | form | history
@@ -401,7 +399,7 @@ export default function PMApp({ session, onLogout, onNavigate }) {
   return null;
 }
 
-/* ============================================================ HOME ============================================================ */
+/* HOME */
 function HomeScreen({records, onOpen, onHistory, loading, saveStatus, hasToken, session, onLogout, onNavigate}) {
   const thisMonth = records.filter(r=>r.pmDate?.slice(0,7)===today().slice(0,7)).length;
   const ngCount   = records.filter(r=>r.overallResult==='NG').length;
@@ -475,7 +473,7 @@ function HomeScreen({records, onOpen, onHistory, loading, saveStatus, hasToken, 
   );
 }
 
-/* ============================================================ HISTORY ============================================================ */
+/* HISTORY */
 function HistoryScreen({records, filter, setFilter, onBack, onEdit, onPrint, printing, onDelete}) {
   const list = [...records].filter(r=>(r.jigId+r.jigName+r.inspector+r.pmDate).toLowerCase().includes(filter.toLowerCase())).sort((a,b)=>b.createdAt-a.createdAt);
   return (
@@ -518,7 +516,7 @@ function HistoryScreen({records, filter, setFilter, onBack, onEdit, onPrint, pri
   );
 }
 
-/* ============================================================ FORM ============================================================ */
+/* FORM */
 function FormScreen({jig, record, setRecord, onSave, onBack, onPrint, printing}) {
   const [open, setOpen] = useState({});
   const upd = (k,v) => setRecord(r=>({...r,data:{...r.data,[k]:v}}));
