@@ -162,7 +162,7 @@ function ChecklistRow({ item, value, onChange }) {
   );
 }
 
-export default function MobileForm({ jig, session, onSubmit, onCancel, diagramSrc }) {
+export default function MobileForm({ jig, session, plan, onSubmit, onCancel, diagramSrc }) {
   const [secIdx, setSecIdx] = useState(0);
   const [data, setData] = useState({});  // { [secId]: { [itemId]: ... } }
   const [remarks, setRemarks] = useState({});
@@ -285,12 +285,16 @@ export default function MobileForm({ jig, session, onSubmit, onCancel, diagramSr
     });
 
     const record = {
+      id: `REC-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+      planId: plan?.id || null,
       jigId: jig.id,
       jigName: jig.name,
       pmDate: new Date().toISOString().slice(0,10),
       shift: session?.shift || 'A',
       inspector: session?.name || '',
       inspectorEmp: session?.emp || '',
+      engineerNote: plan?.engineerNote || '',
+      dueDate: plan?.dueDate || '',
       data,
       remarks,
       overallResult: overall,
@@ -306,6 +310,11 @@ export default function MobileForm({ jig, session, onSubmit, onCancel, diagramSr
         <div>
           <Kicker color={c.hi}>{jig.id} · {jig.process}</Kicker>
           <div style={{ fontSize:14, fontWeight:700 }}>{jig.name}</div>
+          {plan && (
+            <div style={{ marginTop:4, fontFamily:'JetBrains Mono', fontSize:10, color:c.hi }}>
+              PLAN {plan.id} · DUE {plan.dueDate} · {plan.priority?.toUpperCase?.() || 'NORMAL'}
+            </div>
+          )}
         </div>
         <button onClick={onCancel} style={{
           width:36, height:36, background:'transparent', border:`1.5px solid ${c.hi}`,
@@ -341,6 +350,13 @@ export default function MobileForm({ jig, session, onSubmit, onCancel, diagramSr
       )}
 
       {/* Diagram thumb */}
+      {plan?.engineerNote && (
+        <div style={{ margin:'10px 12px 0', padding:'10px 12px', background:'#fff5f0', border:`1.5px solid ${c.hi}` }}>
+          <Kicker color={c.hi}>ENGINEER INSTRUCTION · ข้อกำหนดจากวิศวกร</Kicker>
+          <div className="thai" style={{ marginTop:4, fontSize:13, lineHeight:1.45, color:c.ink }}>{plan.engineerNote}</div>
+        </div>
+      )}
+
       {diagramSrc && (
         <div style={{ padding:'10px 12px 0' }}>
           <Kicker>ENG · DRAWING / แผนผัง</Kicker>

@@ -99,7 +99,7 @@ export default function AdminScreen({ onBack }) {
           </div>
           <div style={{ marginTop:14, paddingTop:14, borderTop:`1px dashed ${c.line}`, fontSize:11, color:c.steel, lineHeight:1.7 }}>
             <strong>หมายเหตุ:</strong> ระบบนี้เก็บ roster ใน localStorage ของแต่ละเครื่อง — สำหรับ production แนะนำให้ย้ายไป LDAP / Active Directory<br/>
-            <strong>Data:</strong> PM records เก็บใน GitHub Issues ของ repo · cache + offline queue เก็บใน localStorage
+            <strong>Data:</strong> PM plans/records รองรับ SQL API ผ่าน VITE_SQL_API_URL · ถ้าไม่ตั้งค่า ระบบจะใช้ GitHub Issues/localStorage สำหรับเดโม
           </div>
         </div>
       </div>
@@ -119,7 +119,8 @@ function EditRow({ draft, setDraft, onSave, onCancel }) {
       <td style={{ padding:'6px' }}>{inp('pin', 60, 6)}</td>
       <td style={{ padding:'6px' }}>
         <select value={draft.role} onChange={e=>setDraft(d=>({...d, role:e.target.value}))} style={{ padding:'4px', fontSize:11 }}>
-          <option value="inspector">inspector</option>
+          <option value="technician">technician</option>
+          <option value="engineer">engineer</option>
           <option value="supervisor">supervisor</option>
           <option value="admin">admin</option>
         </select>

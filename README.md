@@ -1,23 +1,24 @@
-# PM JIG v2 — Thai Summit Automotive
+# PM JIG-FIXTURE Planner & Inspection — Thai Summit Automotive
 
-Production-ready upgrade of the PM JIG inspection system. Bilingual TH/EN, mobile-friendly, offline-first.
+โปรแกรมสำหรับให้ **วิศวกรวางแผน PM JIG-FIXTURE** และให้ **ช่างเทคนิคตรวจสอบตามแผน** พร้อมบันทึกผลตรวจลงฐานข้อมูลแบบ SQL ผ่าน REST API
 
-## What's new in v2
+## ความสามารถหลัก
 
-| Area | v1 | v2 |
-|---|---|---|
-| **Auth** | None — anyone could submit | PIN login, three roles (inspector / supervisor / admin) |
-| **Dashboard** | None | Supervisor analytics — KPIs, trend, problem jigs, inspector leaderboard |
-| **Calibration** | None | Tool calibration register with overdue/due/valid status |
-| **Admin** | None | User roster CRUD + system controls |
-| **Offline** | Best-effort | Real queue + status indicator + drain on reconnect |
-| **Branding** | Generic dark | Industrial hi-vis (orange/black, ANSI-style) |
+| Area | รายละเอียด |
+|---|---|
+| PM Planning | วิศวกร/หัวหน้างานสร้างแผน PM ตาม JIG, due date, frequency, priority และมอบหมายช่าง |
+| Technician Execution | ช่างเห็นงานที่ถูกมอบหมาย กดเริ่มตรวจจากแผน และบันทึกผลวัด/OK-NG ตาม checkpoint |
+| SQL-ready Storage | รองรับ `VITE_SQL_API_URL` เพื่อบันทึก `pm_plans`, `pm_records`, `pm_record_items` ใน SQL backend |
+| Auto Next Plan | เมื่อปิดงานตามแผน ระบบสร้างแผนรอบถัดไปตาม frequency อัตโนมัติ |
+| Dashboard & History | ดู KPI, NG ล่าสุด, problem jigs และประวัติการตรวจ |
+| Calibration & Admin | ทะเบียนเครื่องมือวัด, จัดการ user roster และสิทธิ์ role |
+| Offline/Demo Fallback | หากยังไม่มี SQL API ระบบยังรันเดโมได้ด้วย GitHub Issues/localStorage |
 
 ## Quick start
 
 ```bash
 npm install
-cp .env.example .env   # then edit — paste GitHub token
+cp .env.example .env
 npm run dev
 ```
 
@@ -25,48 +26,66 @@ Open http://localhost:5173
 
 ### Demo accounts
 
-| EMP | PIN | Role |
+| EMP | PIN | Role | ใช้งาน |
+|---|---|---|---|
+| TECH-04821 | 1234 | technician | ตรวจ PM ตามแผน |
+| ENG-001 | 2468 | engineer | สร้างแผน PM |
+| SUP-001 | 9999 | supervisor | Dashboard + planning |
+| ADM-001 | 0000 | admin | เห็นทุกเมนู |
+
+## SQL backend configuration
+
+Frontend ไม่ควรต่อ database โดยตรง ให้ตั้งค่า REST API ที่เขียนข้อมูลลง SQL:
+
+```env
+VITE_SQL_API_URL=https://pm-jig-api.example.com/api
+VITE_SQL_API_KEY=replace-with-api-token
+```
+
+API contract ที่ frontend เรียกใช้:
+
+| Method | Path | Purpose |
 |---|---|---|
-| EMP-04821 | 1234 | Inspector |
-| SUP-001 | 9999 | Supervisor (sees Dashboard) |
-| ADM-001 | 0000 | Admin (sees everything) |
+| `GET` | `/health` | ตรวจว่า SQL API พร้อมใช้งาน |
+| `GET` | `/pm-plans` | โหลดแผน PM ทั้งหมด |
+| `POST` | `/pm-plans` | สร้างแผน PM |
+| `PUT` | `/pm-plans/:planId` | อัปเดตสถานะแผน เช่น `in_progress` |
+| `POST` | `/pm-plans/:planId/complete` | ปิดแผนเดิมและสร้างแผนรอบถัดไป |
+| `GET` | `/pm-records` | โหลดผลตรวจ |
+| `POST` | `/pm-records` | บันทึกผลตรวจ PM |
+| `PUT` | `/pm-records/:recordId` | แก้ไขผลตรวจ |
+| `DELETE` | `/pm-records/:recordId` | ลบ/ยกเลิกผลตรวจ |
+
+ดู schema เริ่มต้นได้ที่ [`sql/schema.sql`](sql/schema.sql)
 
 ## Architecture
 
 ```
 src/
-├── main.jsx              entry
-├── Root.jsx              top-level router (login → app/dashboard/cal/admin)
-├── App.jsx               PM JIG main app (home, form, history) — ported from v1
-├── auth.js               PIN login + roster + RBAC
-├── offline.js            offline queue + sync drain
-├── db.js                 GitHub Issues backend
-├── theme.css             industrial hi-vis tokens
-├── diagrams.js           jig engineering drawings (data URLs)
-├── LoginScreen.jsx
-├── DashboardScreen.jsx   supervisor analytics
-├── CalibrationScreen.jsx tool calibration register
-├── AdminScreen.jsx       user roster CRUD
-└── OfflineIndicator.jsx  floating status pill
+├── main.jsx                  entry
+├── Root.jsx                  top-level router + plan/record workflow
+├── PMPlanningScreen.jsx      engineer planning board
+├── pmPlan.js                 PM plan date/status helpers
+├── App.jsx                   JIG data definitions + legacy print helpers
+├── auth.js                   PIN login + roster + RBAC roles
+├── db.js                     SQL API gateway with GitHub/localStorage fallback
+├── offline.js                offline queue + sync drain
+├── MobileHome.jsx            technician home + assigned PM plans
+├── MobileForm.jsx            inspection execution form
+├── DashboardScreen.jsx       supervisor/engineer analytics
+├── CalibrationScreen.jsx     calibration register
+├── AdminScreen.jsx           user roster CRUD
+└── theme.css                 industrial hi-vis theme
 ```
 
-## Deployment
+## Production checklist
 
-GitHub Pages workflow lives in `.github/workflows/deploy.yml`. Push to `main` and it builds + deploys.
-
-For factory tablets, install as a PWA (Add to Home Screen on Chrome / Edge).
-
-## Roadmap to real production
-
-This v2 is a strong staging-ready upgrade, but for a true shop-floor system you still need:
-
-- [ ] Replace GitHub Issues backend with PostgreSQL / MS SQL + REST API
-- [ ] Replace localStorage roster with LDAP / Active Directory federation
-- [ ] Move offline queue to IndexedDB + Service Worker (larger quota, true PWA)
-- [ ] Add IATF 16949 audit trail (immutable revision history)
-- [ ] Integrate label printer for borrow slips (if extending to tool crib)
-- [ ] Hardware barcode/QR scanner integration via `BarcodeDetector` API
-- [ ] MDM (Mobile Device Management) for tablet rollout
+- [ ] Implement REST API backed by PostgreSQL / MS SQL using `sql/schema.sql`
+- [ ] Hash PINs or replace local roster with LDAP / Active Directory federation
+- [ ] Move offline queue from localStorage to IndexedDB + Service Worker
+- [ ] Add immutable audit trail for IATF 16949 traceability
+- [ ] Add QR/barcode scan to open JIG/plan directly
+- [ ] Deploy tablets via MDM and lock down environment variables
 
 ## License
 

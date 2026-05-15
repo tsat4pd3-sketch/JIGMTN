@@ -1,4 +1,6 @@
 /* PM JIG v2 — industrial hi-vis theme overrides */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Sarabun:wght@400;500;600;700&display=swap');
+
 :root {
   --hi: #ff6a00;
   --hi-2: #ffb000;
@@ -8,8 +10,6 @@
   --paper: #f4f1ea;
   --line: #d8d4cc;
 }
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Sarabun:wght@400;500;600;700&display=swap');
 
 body {
   font-family: 'Inter', 'Sarabun', system-ui, sans-serif;
