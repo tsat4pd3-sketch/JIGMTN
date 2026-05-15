@@ -70,6 +70,7 @@ export function logout() {
 
 export function can(session, action) {
   if (!session) return false;
+  // Single RBAC matrix for technician, engineer, supervisor, and admin workflows.
   const matrix = {
     'pm.create':       ['technician', 'inspector', 'engineer', 'supervisor', 'admin'],
     'pm.edit':         ['technician', 'inspector', 'engineer', 'supervisor', 'admin'],

@@ -19,6 +19,7 @@ import './theme.css';
 
 export default function Root() {
   const [session, setSession] = useState(getSession());
+  // Route list is kept in one place to avoid PR conflict blocks around planning/config screens.
   const [route, setRoute] = useState('home'); // home | form | history | dashboard | calibration | planning | jigConfig | admin
   const [jigConfigs, setJigConfigs] = useState([]);
   const [jigList, setJigList] = useState(JIG_LIST);

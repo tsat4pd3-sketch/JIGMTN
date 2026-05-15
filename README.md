@@ -62,6 +62,8 @@ API contract ที่ frontend เรียกใช้:
 
 ดู schema เริ่มต้นได้ที่ [`sql/schema.sql`](sql/schema.sql)
 
+> Merge note: README intentionally keeps the SQL backend contract and JIG/FIXTURE configuration contract in one section to avoid split conflict blocks during PR merges.
+
 ## Architecture
 
 ```

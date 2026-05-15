@@ -6,7 +6,8 @@
  * it calls API endpoints and the API writes normalized tables.
  *
  * Compatibility mode: without VITE_SQL_API_URL, existing PM records continue to
- * use GitHub Issues and PM plans use localStorage so the demo remains runnable.
+ * use GitHub Issues and PM plans/JIG configs use localStorage so the demo remains runnable.
+ * Keep SQL and fallback paths in this gateway to avoid split merge conflict blocks.
  */
 
 const REPO  = import.meta.env.VITE_GITHUB_REPO  || 'tsat4pd3-sketch/JIGMTN'

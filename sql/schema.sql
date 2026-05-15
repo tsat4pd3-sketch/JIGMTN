@@ -1,5 +1,6 @@
 -- PM JIG-FIXTURE SQL schema
 -- Designed for PostgreSQL. For MS SQL/MySQL, map JSONB to NVARCHAR(MAX)/JSON and BIGINT timestamps accordingly.
+-- Merge note: keep this schema as the single source for JIG config, PM plans, and PM records.
 
 CREATE TABLE IF NOT EXISTS users (
   emp_code        VARCHAR(32) PRIMARY KEY,
