@@ -34,7 +34,7 @@ export default function DashboardScreen({ records, jigList, session, onBack, onO
       if (idx >= 0 && idx < arr.length) arr[idx]++;
     });
     return arr;
-  }, [inRange.length, days]);
+  }, [records, days]);
 
   // Per-jig stats
   const jigStats = jigList.map(j => {

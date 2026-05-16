@@ -22,7 +22,7 @@ export default function Root() {
   const [hasToken, setHasToken] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
 
-  useEffect(() => { setHasToken(checkAuth()); }, []);
+  useEffect(() => { checkAuth().then(r => setHasToken(r.ok)); }, []);
   useEffect(() => {
     if (!session) return;
     loadRecords().then(setRecords).catch(()=>setRecords([]));
@@ -57,7 +57,9 @@ export default function Root() {
       setRoute('home');
     } catch (e) {
       setSaveStatus('error');
-      // still cache locally — load v1 cache key if needed
+      // keep record in local state and localStorage so data isn't lost
+      setRecords(prev => [record, ...prev.filter(r => r.createdAt !== record.createdAt)]);
+      setTimeout(()=>setSaveStatus(null), 4000);
       setRoute('home');
     }
   };
