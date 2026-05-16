@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { getRoster } from './auth.js';
 
 const c = { ink:'#0d0d0d', hi:'#ff6a00', paper:'#f4f1ea', line:'#d8d4cc', ng:'#c8201d', ok:'#2f7d32', steel:'#6b6b6b', amber:'#ffb000' };
@@ -20,6 +20,295 @@ function sectionCounts(jig) {
   });
   return r;
 }
+
+function compressImage(file) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, 1200 / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.8));
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  });
+}
+
+const blankCp = (idx, x, y) => ({
+  id: `CP${idx}`, label: '', type: 'dimension',
+  nom: '', min: '', max: '', x, y,
+});
+
+/* ── Fixture image + check-point editor ───────────────────────── */
+function FixtureImageSection({ draft, set }) {
+  const [addMode,   setAddMode]   = useState(false);
+  const [pending,   setPending]   = useState(null);   // { x, y } not yet confirmed
+  const [editIdx,   setEditIdx]   = useState(null);   // index of cp being edited
+  const [cpForm,    setCpForm]    = useState(null);   // form values while editing
+  const imgRef = useRef(null);
+
+  const cps = draft.checkPoints || [];
+
+  /* — image upload — */
+  const onFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await compressImage(file);
+    set('setupImage', dataUrl);
+    e.target.value = '';
+  };
+
+  /* — click image to place pin — */
+  const onImageClick = (e) => {
+    if (!addMode) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top)  / rect.height;
+    const nextIdx = cps.length + 1;
+    setPending({ x, y });
+    setEditIdx('new');
+    setCpForm(blankCp(nextIdx, x, y));
+    setAddMode(false);
+  };
+
+  /* — click existing pin — */
+  const onPinClick = (e, idx) => {
+    e.stopPropagation();
+    setEditIdx(idx);
+    setCpForm({ ...cps[idx] });
+    setPending(null);
+  };
+
+  /* — save form — */
+  const saveForm = () => {
+    if (!cpForm.label.trim()) { alert('กรุณากรอก Label'); return; }
+    let next;
+    if (editIdx === 'new') {
+      next = [...cps, { ...cpForm }];
+    } else {
+      next = cps.map((cp, i) => i === editIdx ? { ...cpForm } : cp);
+    }
+    set('checkPoints', next);
+    cancelForm();
+  };
+
+  const cancelForm = () => { setEditIdx(null); setCpForm(null); setPending(null); };
+
+  const deletePin = (idx) => {
+    const next = cps.filter((_, i) => i !== idx).map((cp, i) => ({ ...cp, id:`CP${i+1}` }));
+    set('checkPoints', next);
+    if (editIdx === idx) cancelForm();
+  };
+
+  const setF = (k, v) => setCpForm(f => ({ ...f, [k]: v }));
+
+  const pinColors = [c.hi, '#1d4ed8', c.ok, '#7c3aed', c.ng, c.amber, '#0891b2', '#c026d3'];
+  const pinColor  = (i) => pinColors[i % pinColors.length];
+
+  return (
+    <div style={{ marginTop:16, borderTop:`2px dashed ${c.hi}`, paddingTop:14 }}>
+      <div className="kicker" style={{ color:c.hi, marginBottom:12 }}>
+        FIXTURE IMAGE &amp; CHECK POINTS · ภาพ Fixture และจุดตรวจ
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, alignItems:'start' }}>
+
+        {/* ── Left: image canvas ─────────────────────────────── */}
+        <div>
+          {/* Upload bar */}
+          <div style={{ display:'flex', gap:8, marginBottom:8, alignItems:'center' }}>
+            <label style={{
+              padding:'5px 12px', background:c.ink, color:c.hi,
+              fontFamily:'JetBrains Mono', fontSize:10, fontWeight:700, cursor:'pointer',
+            }}>
+              ↑ UPLOAD IMAGE
+              <input type="file" accept="image/*" style={{ display:'none' }} onChange={onFileChange} />
+            </label>
+            {draft.setupImage && (
+              <button onClick={()=>set('setupImage',null)} style={{
+                padding:'5px 10px', background:'transparent', color:c.ng, border:`1.5px solid ${c.ng}`,
+                fontFamily:'JetBrains Mono', fontSize:10, fontWeight:700, cursor:'pointer',
+              }}>✕ REMOVE</button>
+            )}
+            {draft.setupImage && (
+              <button onClick={()=>{ setAddMode(a=>!a); cancelForm(); }} style={{
+                padding:'5px 12px',
+                background: addMode ? c.hi : '#fff',
+                color: addMode ? c.ink : c.ink,
+                border:`1.5px solid ${addMode ? c.hi : c.ink}`,
+                fontFamily:'JetBrains Mono', fontSize:10, fontWeight:700, cursor:'pointer',
+              }}>{addMode ? '● CLICK IMAGE TO PIN' : '＋ ADD POINT'}</button>
+            )}
+          </div>
+
+          {/* Image + pins */}
+          {draft.setupImage ? (
+            <div
+              style={{
+                position:'relative', background:c.paper, border:`1.5px solid ${c.line}`,
+                cursor: addMode ? 'crosshair' : 'default', userSelect:'none',
+              }}
+              onClick={onImageClick}
+              ref={imgRef}
+            >
+              <img
+                src={draft.setupImage}
+                alt="fixture"
+                style={{ width:'100%', display:'block', pointerEvents:'none' }}
+              />
+              {/* confirmed pins */}
+              {cps.map((cp, i) => (
+                <div key={cp.id} onClick={e => onPinClick(e, i)} style={{
+                  position:'absolute',
+                  left: `calc(${cp.x*100}% - 12px)`,
+                  top:  `calc(${cp.y*100}% - 12px)`,
+                  width:24, height:24, borderRadius:'50%',
+                  background: pinColor(i), color:'#fff',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  fontFamily:'JetBrains Mono', fontSize:9, fontWeight:700,
+                  border:`2px solid #fff`,
+                  boxShadow:'0 1px 4px rgba(0,0,0,0.5)',
+                  cursor:'pointer', zIndex:2,
+                  outline: editIdx===i ? `3px solid ${c.ink}` : 'none',
+                }}>
+                  {i+1}
+                </div>
+              ))}
+              {/* pending pin (placed but not yet saved) */}
+              {pending && (
+                <div style={{
+                  position:'absolute',
+                  left: `calc(${pending.x*100}% - 12px)`,
+                  top:  `calc(${pending.y*100}% - 12px)`,
+                  width:24, height:24, borderRadius:'50%',
+                  background:'#fff', border:`2px dashed ${c.ink}`,
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  fontFamily:'JetBrains Mono', fontSize:9, fontWeight:700, color:c.ink,
+                  boxShadow:'0 1px 4px rgba(0,0,0,0.4)', zIndex:3,
+                }}>?</div>
+              )}
+              {addMode && (
+                <div style={{
+                  position:'absolute', bottom:6, left:'50%', transform:'translateX(-50%)',
+                  padding:'3px 10px', background:'rgba(0,0,0,0.65)', color:c.hi,
+                  fontFamily:'JetBrains Mono', fontSize:9, fontWeight:700, pointerEvents:'none',
+                }}>คลิกเพื่อวางจุดตรวจ</div>
+              )}
+            </div>
+          ) : (
+            <label style={{
+              display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+              height:180, background:c.paper, border:`2px dashed ${c.line}`, cursor:'pointer',
+              color:c.steel, fontFamily:'JetBrains Mono', fontSize:10, gap:8,
+            }}>
+              <span style={{ fontSize:32 }}>🖼</span>
+              <span>UPLOAD FIXTURE IMAGE</span>
+              <span style={{ fontSize:9, color:c.line }}>JPG / PNG / WEBP</span>
+              <input type="file" accept="image/*" style={{ display:'none' }} onChange={onFileChange} />
+            </label>
+          )}
+        </div>
+
+        {/* ── Right: check-point list + form ─────────────────── */}
+        <div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+            <div className="kicker">CHECK POINTS · จุดตรวจ ({cps.length})</div>
+          </div>
+
+          {/* Inline form (add new or edit existing) */}
+          {cpForm && (
+            <div style={{ background:'#fff', border:`2px solid ${c.hi}`, padding:10, marginBottom:10 }}>
+              <div className="kicker" style={{ color:c.hi, marginBottom:8 }}>
+                {editIdx==='new' ? `NEW · CP${cps.length+1}` : `EDIT · ${cps[editIdx]?.id}`}
+              </div>
+              <Field label="LABEL · ชื่อจุดตรวจ">
+                <input value={cpForm.label} onChange={e=>setF('label',e.target.value)}
+                  placeholder="เช่น Locate Pin Front, Air Clamp 1"
+                  style={{ width:'100%', padding:'5px 7px', border:`1.5px solid ${c.hi}`, fontSize:11, boxSizing:'border-box' }} />
+              </Field>
+              <Field label="TYPE · ประเภทการตรวจ">
+                <div style={{ display:'flex', gap:6 }}>
+                  {[['dimension','📐 DIMENSION'],['attribute','✓ ATTRIBUTE']].map(([v,l])=>(
+                    <button key={v} onClick={()=>setF('type',v)} style={{
+                      flex:1, padding:'6px 4px',
+                      background: cpForm.type===v ? c.ink : '#fff',
+                      color:      cpForm.type===v ? c.hi  : c.ink,
+                      border:`1.5px solid ${cpForm.type===v ? c.ink : c.line}`,
+                      fontFamily:'JetBrains Mono', fontSize:10, fontWeight:700, cursor:'pointer',
+                    }}>{l}</button>
+                  ))}
+                </div>
+              </Field>
+              {cpForm.type==='dimension' && (
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:6 }}>
+                  {[['nom','NOM (mm)'],['min','MIN'],['max','MAX']].map(([k,l])=>(
+                    <Field key={k} label={l}>
+                      <input type="number" step="0.01" value={cpForm[k]}
+                        onChange={e=>setF(k,e.target.value)}
+                        style={{ width:'100%', padding:'5px 6px', border:`1.5px solid ${c.hi}`, fontFamily:'JetBrains Mono', fontSize:11, boxSizing:'border-box' }} />
+                    </Field>
+                  ))}
+                </div>
+              )}
+              {cpForm.type==='attribute' && (
+                <div style={{ padding:'6px 8px', background:'#f0fdf4', border:`1px solid ${c.ok}`, fontSize:10, fontFamily:'JetBrains Mono', color:c.ok, marginTop:4 }}>
+                  ตรวจสอบแบบ OK / NG
+                </div>
+              )}
+              <div style={{ display:'flex', gap:6, marginTop:10 }}>
+                <button onClick={cancelForm} style={{ flex:1, padding:'6px', background:'transparent', border:`1.5px solid ${c.line}`, fontFamily:'JetBrains Mono', fontSize:10, fontWeight:700, cursor:'pointer', color:c.steel }}>CANCEL</button>
+                <button onClick={saveForm}   style={{ flex:2, padding:'6px', background:c.ok, color:'#fff', border:'none', fontFamily:'JetBrains Mono', fontSize:10, fontWeight:700, cursor:'pointer' }}>✓ SAVE POINT</button>
+              </div>
+            </div>
+          )}
+
+          {/* List */}
+          {cps.length === 0 && !cpForm && (
+            <div style={{ padding:20, textAlign:'center', color:c.line, fontFamily:'JetBrains Mono', fontSize:10, border:`1px dashed ${c.line}` }}>
+              {draft.setupImage ? 'กด ＋ ADD POINT แล้วคลิกบนรูป' : 'Upload รูปก่อนเพื่อวางจุดตรวจ'}
+            </div>
+          )}
+          {cps.map((cp, i) => (
+            <div key={cp.id} style={{
+              display:'flex', gap:8, alignItems:'flex-start',
+              padding:'8px 10px', marginBottom:4,
+              background: editIdx===i ? '#fff5f0' : '#fff',
+              border:`1.5px solid ${editIdx===i ? c.hi : c.line}`,
+              cursor:'pointer',
+            }} onClick={()=>{ setEditIdx(i); setCpForm({...cp}); setPending(null); }}>
+              <div style={{
+                width:22, height:22, borderRadius:'50%', flexShrink:0,
+                background:pinColor(i), color:'#fff',
+                display:'flex', alignItems:'center', justifyContent:'center',
+                fontFamily:'JetBrains Mono', fontSize:9, fontWeight:700,
+              }}>{i+1}</div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontWeight:700, fontSize:12 }}>{cp.label || <span style={{ color:c.line }}>—</span>}</div>
+                {cp.type==='dimension' ? (
+                  <div className="mono" style={{ fontSize:9, color:c.steel, marginTop:1 }}>
+                    📐 {cp.nom||'?'} mm · {cp.min||'?'}–{cp.max||'?'}
+                  </div>
+                ) : (
+                  <div className="mono" style={{ fontSize:9, color:c.ok, marginTop:1 }}>✓ OK / NG</div>
+                )}
+              </div>
+              <button onClick={e=>{ e.stopPropagation(); deletePin(i); }} style={{
+                padding:'2px 7px', background:'transparent', color:c.ng, border:`1px solid ${c.ng}`,
+                fontFamily:'JetBrains Mono', fontSize:9, fontWeight:700, cursor:'pointer', flexShrink:0,
+              }}>✕</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
 
 export default function JigSetupScreen({ jigList, onBack }) {
   const [setup, setSetup]       = useState(loadSetup);
@@ -64,6 +353,8 @@ export default function JigSetupScreen({ jigList, onBack }) {
       setupNote:    s.setupNote    ?? '',
       responsible:  s.responsible  ?? '',
       supervisor:   s.supervisor   ?? '',
+      setupImage:   s.setupImage   ?? null,
+      checkPoints:  s.checkPoints  ?? [],
     });
   };
 
@@ -77,7 +368,11 @@ export default function JigSetupScreen({ jigList, onBack }) {
   const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
 
   const exportSetup = () => {
-    const out = enriched.map(j => ({ id:j.id, name:j.name, ...(setup[j.id]||{}) }));
+    const out = enriched.map(j => {
+      const s = { ...(setup[j.id]||{}) };
+      delete s.setupImage; // omit binary data from export
+      return { id:j.id, name:j.name, ...s };
+    });
     const blob = new Blob([JSON.stringify(out, null, 2)], { type:'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href=url; a.download='jig-4m-setup.json'; a.click();
@@ -192,20 +487,19 @@ export default function JigSetupScreen({ jigList, onBack }) {
                         <div style={{ padding:16, background:'#fff8f5', borderTop:`3px solid ${c.hi}` }}>
                           <div className="kicker" style={{ color:c.hi, marginBottom:14 }}>4M SETUP · {j.id} — {j.name}</div>
 
+                          {/* 4M grid */}
                           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:14, marginBottom:16 }}>
 
                             {/* ① MAN */}
                             <MCard title="MAN · คน" accent="#1d4ed8" bg="#eff6ff">
                               <Field label="RESPONSIBLE · ผู้รับผิดชอบ">
-                                <select value={draft.responsible} onChange={e=>set('responsible',e.target.value)}
-                                  style={selStyle}>
+                                <select value={draft.responsible} onChange={e=>set('responsible',e.target.value)} style={selStyle}>
                                   <option value="">— ยังไม่ระบุ —</option>
                                   {inspectors.map(u => <option key={u.emp} value={u.emp}>{u.emp} · {u.name}</option>)}
                                 </select>
                               </Field>
                               <Field label="SUPERVISOR · หัวหน้า">
-                                <select value={draft.supervisor} onChange={e=>set('supervisor',e.target.value)}
-                                  style={selStyle}>
+                                <select value={draft.supervisor} onChange={e=>set('supervisor',e.target.value)} style={selStyle}>
                                   <option value="">— ยังไม่ระบุ —</option>
                                   {supervisors.map(u => <option key={u.emp} value={u.emp}>{u.emp} · {u.name}</option>)}
                                 </select>
@@ -281,10 +575,13 @@ export default function JigSetupScreen({ jigList, onBack }) {
                                   style={{ ...inpStyle, fontFamily:'Sarabun, system-ui', resize:'vertical' }} />
                               </Field>
                             </MCard>
-
                           </div>
 
-                          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+                          {/* ⑤ Fixture image + check points */}
+                          <FixtureImageSection draft={draft} set={set} />
+
+                          {/* Action buttons */}
+                          <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:16 }}>
                             <button onClick={cancel} style={{ padding:'8px 16px', background:'#fff', color:c.steel, border:`1.5px solid ${c.line}`, fontFamily:'JetBrains Mono', fontSize:11, fontWeight:700, cursor:'pointer' }}>× CANCEL</button>
                             <button onClick={()=>doSave(j.id)} style={{ padding:'8px 20px', background:c.ok, color:'#fff', border:'none', fontFamily:'JetBrains Mono', fontSize:11, fontWeight:700, cursor:'pointer' }}>✓ SAVE 4M DATA</button>
                           </div>
