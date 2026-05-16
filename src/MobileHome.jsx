@@ -133,10 +133,13 @@ export default function MobileHome({ session, jigList, records, plans = [], onLo
       <div style={{ padding:'0 12px 8px', display:'flex', gap:6, flexWrap:'wrap' }}>
         <button onClick={onHistory} style={navBtn(false)}>📋 ประวัติ</button>
         {['engineer','supervisor','admin'].includes(session?.role) && (
-          <button onClick={()=>onNavigate('dashboard')} style={navBtn(true)}>📊 Dashboard</button>
+          <button onClick={()=>onNavigate('dashboard')} style={navBtn(false)}>📊 Dashboard</button>
         )}
         {['engineer','supervisor','admin'].includes(session?.role) && (
           <button onClick={()=>onNavigate('planning')} style={navBtn(false)}>🗓 PM Plan</button>
+        )}
+        {['supervisor','admin'].includes(session?.role) && (
+          <button onClick={()=>onNavigate('jigsetup')} style={navBtn(false)}>⚙ Jig Setup</button>
         )}
         <button onClick={()=>onNavigate('calibration')} style={navBtn(false)}>🔧 Cal</button>
         {session?.role==='admin' && <button onClick={()=>onNavigate('admin')} style={navBtn(false)}>⚙ Admin</button>}
