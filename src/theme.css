@@ -1,4 +1,4 @@
-/* PM JIG v2 — industrial hi-vis theme overrides */
+/* PM JIG v2 — industrial hi-vis theme */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Sarabun:wght@400;500;600;700&display=swap');
 
 :root {
@@ -11,8 +11,12 @@
   --line: #d8d4cc;
 }
 
+*, *::before, *::after { box-sizing: border-box; }
+
 body {
   font-family: 'Inter', 'Sarabun', system-ui, sans-serif;
+  margin: 0;
+  -webkit-text-size-adjust: 100%;
 }
 
 .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
@@ -34,4 +38,95 @@ body {
   font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
   letter-spacing: 0.06em; text-transform: uppercase;
   padding: 2px 7px; border: 1.5px solid currentColor; border-radius: 2px;
+}
+
+/* ── Responsive layout utilities ──────────────────────────── */
+
+.screen-pad { padding: 20px; }
+
+/* 4-column KPI grid */
+.grid-kpi-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+/* 3-column KPI grid */
+.grid-kpi-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+/* 5-column KPI grid */
+.grid-kpi-5 {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+/* 2-column body layout (2fr 1fr) */
+.grid-2col {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+}
+/* Plan layout: sidebar + main */
+.plan-layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 14px;
+}
+/* Equal two-col */
+.grid-half {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* Scrollable table wrapper — prevents horizontal overflow on mobile */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.table-scroll table { min-width: 600px; }
+
+/* Nav button row that wraps */
+.nav-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Analytics-specific */
+.analytics-charts {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.analytics-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* ── Tablet (≤ 900px) ─────────────────────────────────────── */
+@media (max-width: 900px) {
+  .grid-kpi-4  { grid-template-columns: repeat(2, 1fr); }
+  .grid-kpi-5  { grid-template-columns: repeat(3, 1fr); }
+  .grid-2col   { grid-template-columns: 1fr; }
+  .plan-layout { grid-template-columns: 1fr; }
+  .analytics-charts { grid-template-columns: 1fr; }
+  .analytics-bottom { grid-template-columns: 1fr; }
+}
+
+/* ── Mobile (≤ 600px) ─────────────────────────────────────── */
+@media (max-width: 600px) {
+  .grid-kpi-3  { grid-template-columns: repeat(2, 1fr); }
+  .grid-kpi-5  { grid-template-columns: repeat(2, 1fr); }
+  .grid-half   { grid-template-columns: 1fr; }
+  .screen-pad  { padding: 10px; }
+  .hide-mobile { display: none !important; }
 }

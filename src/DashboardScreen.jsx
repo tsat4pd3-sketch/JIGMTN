@@ -84,9 +84,9 @@ export default function DashboardScreen({ records, jigList, session, onBack, onO
         </div>
       </div>
 
-      <div style={{ maxWidth:1280, margin:'0 auto', padding:20 }}>
+      <div className="screen-pad" style={{ maxWidth:1280, margin:'0 auto' }}>
         {/* KPI tiles */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:16 }}>
+        <div className="grid-kpi-4">
           {[
             ['TOTAL CHECKS', totalChecks, 'การตรวจทั้งหมด', c.ink],
             ['NG COUNT', ngCount, 'พบความผิดปกติ', c.ng],
@@ -122,7 +122,7 @@ export default function DashboardScreen({ records, jigList, session, onBack, onO
           </div>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:16 }}>
+        <div className="grid-2col">
           {/* Problem jigs */}
           <div style={{ background:'#fff', border:`1px solid ${c.line}`, padding:16 }}>
             <div className="kicker" style={{ marginBottom:10 }}>TOP PROBLEM JIGS · จิ๊กที่ต้องดูแล</div>
@@ -172,6 +172,7 @@ export default function DashboardScreen({ records, jigList, session, onBack, onO
         {/* Recent NG */}
         <div style={{ background:'#fff', border:`1px solid ${c.line}`, padding:16, marginTop:16 }}>
           <div className="kicker" style={{ marginBottom:10 }}>RECENT NG · NG ล่าสุด</div>
+          <div className="table-scroll">
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
             <thead>
               <tr style={{ background:c.paper, borderBottom:`1.5px solid ${c.ink}` }}>
@@ -195,6 +196,7 @@ export default function DashboardScreen({ records, jigList, session, onBack, onO
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
     </div>

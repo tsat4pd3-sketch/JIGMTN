@@ -401,7 +401,7 @@ export default function JigSetupScreen({ jigList, onBack }) {
         </div>
       </div>
 
-      <div style={{ maxWidth:1200, margin:'0 auto', padding:20 }}>
+      <div className="screen-pad" style={{ maxWidth:1200, margin:'0 auto' }}>
 
         {/* KPI tiles */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:16 }}>
@@ -429,6 +429,7 @@ export default function JigSetupScreen({ jigList, onBack }) {
 
         {/* Table */}
         <div style={{ background:'#fff', border:`1px solid ${c.line}` }}>
+          <div className="table-scroll">
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
             <thead>
               <tr style={{ background:c.paper, borderBottom:`1.5px solid ${c.ink}` }}>
@@ -580,6 +581,7 @@ export default function JigSetupScreen({ jigList, onBack }) {
           {filtered.length === 0 && (
             <div style={{ padding:40, textAlign:'center', color:c.steel, fontFamily:'JetBrains Mono', fontSize:11 }}>ไม่พบจิ๊กที่ตรงกับเงื่อนไข</div>
           )}
+          </div>
         </div>
       </div>
     </div>

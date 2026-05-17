@@ -62,8 +62,8 @@ export default function CalibrationScreen({ canEdit, onBack }) {
         <button onClick={onBack} style={{ padding:'6px 12px', background:'transparent', color:'#fff', border:'1.5px solid #fff', fontSize:11, fontWeight:700, cursor:'pointer' }}>← BACK</button>
       </div>
 
-      <div style={{ maxWidth:1200, margin:'0 auto', padding:20 }}>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:16 }}>
+      <div className="screen-pad" style={{ maxWidth:1200, margin:'0 auto' }}>
+        <div className="grid-kpi-3">
           <KPI label="OVERDUE" sub="เกินกำหนดสอบเทียบ" value={overdue} accent={c.ng} />
           <KPI label="DUE 30D" sub="ครบกำหนด 30 วัน" value={due} accent={c.amber} />
           <KPI label="VALID" sub="พร้อมใช้งาน" value={tools.length-overdue-due} accent={c.ok} />
@@ -80,6 +80,7 @@ export default function CalibrationScreen({ canEdit, onBack }) {
         </div>
 
         <div style={{ background:'#fff', border:`1px solid ${c.line}` }}>
+          <div className="table-scroll">
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
             <thead>
               <tr style={{ background:c.paper, borderBottom:`1.5px solid ${c.ink}` }}>
@@ -121,6 +122,7 @@ export default function CalibrationScreen({ canEdit, onBack }) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
     </div>
