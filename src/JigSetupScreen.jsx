@@ -1,15 +1,41 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getRoster } from './auth.js';
 
 const c = { ink:'#0d0d0d', hi:'#ff6a00', paper:'#f4f1ea', line:'#d8d4cc', ng:'#c8201d', ok:'#2f7d32', steel:'#6b6b6b', amber:'#ffb000' };
 const SETUP_KEY = 'pm_jig_setup_v1';
 
+/* ── localStorage helpers ──────────────────────────────────────── */
 function loadSetup() {
   try { const s = localStorage.getItem(SETUP_KEY); if (s) return JSON.parse(s); } catch(_) {}
   return {};
 }
-function saveSetup(s) { localStorage.setItem(SETUP_KEY, JSON.stringify(s)); }
+function saveSetupLocal(s) { localStorage.setItem(SETUP_KEY, JSON.stringify(s)); }
 
+/* ── REST API helpers (active only when VITE_SQL_API_URL is set) ─ */
+const SQL_API = (import.meta.env.VITE_SQL_API_URL || '').replace(/\/$/, '');
+const hasApi  = () => Boolean(SQL_API);
+
+async function apiLoadAll() {
+  const r = await fetch(`${SQL_API}/jig-setup`);
+  if (!r.ok) throw new Error('load failed');
+  const items = await r.json();
+  return Object.fromEntries(items.map(s => [s.jigId, s]));
+}
+async function apiSave(jigId, data) {
+  const r = await fetch(`${SQL_API}/jig-setup/${encodeURIComponent(jigId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error('save failed');
+  return r.json();
+}
+async function apiDelete(jigId) {
+  const r = await fetch(`${SQL_API}/jig-setup/${encodeURIComponent(jigId)}`, { method: 'DELETE' });
+  if (!r.ok) throw new Error('delete failed');
+}
+
+/* ── misc helpers ──────────────────────────────────────────────── */
 function sectionCounts(jig) {
   const r = { LP:0, SD:0, AC:0, PS:0 };
   (jig.sections||[]).forEach(s => {
@@ -39,43 +65,37 @@ function compressImage(file) {
 }
 
 const blankCp = (idx, x, y) => ({
-  id: `CP${idx}`, label: '', type: 'dimension',
-  nom: '', min: '', max: '', x, y,
+  id: `CP${idx}`, label: '', type: 'dimension', nom: '', min: '', max: '', x, y,
 });
 
 /* ── Fixture image + check-point editor ───────────────────────── */
 function FixtureImageSection({ draft, set }) {
-  const [addMode,   setAddMode]   = useState(false);
-  const [pending,   setPending]   = useState(null);   // { x, y } not yet confirmed
-  const [editIdx,   setEditIdx]   = useState(null);   // index of cp being edited
-  const [cpForm,    setCpForm]    = useState(null);   // form values while editing
+  const [addMode, setAddMode] = useState(false);
+  const [pending, setPending] = useState(null);
+  const [editIdx, setEditIdx] = useState(null);
+  const [cpForm,  setCpForm]  = useState(null);
   const imgRef = useRef(null);
 
   const cps = draft.checkPoints || [];
 
-  /* — image upload — */
   const onFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const dataUrl = await compressImage(file);
-    set('setupImage', dataUrl);
+    set('setupImage', await compressImage(file));
     e.target.value = '';
   };
 
-  /* — click image to place pin — */
   const onImageClick = (e) => {
     if (!addMode) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top)  / rect.height;
-    const nextIdx = cps.length + 1;
     setPending({ x, y });
     setEditIdx('new');
-    setCpForm(blankCp(nextIdx, x, y));
+    setCpForm(blankCp(cps.length + 1, x, y));
     setAddMode(false);
   };
 
-  /* — click existing pin — */
   const onPinClick = (e, idx) => {
     e.stopPropagation();
     setEditIdx(idx);
@@ -83,15 +103,11 @@ function FixtureImageSection({ draft, set }) {
     setPending(null);
   };
 
-  /* — save form — */
   const saveForm = () => {
     if (!cpForm.label.trim()) { alert('กรุณากรอก Label'); return; }
-    let next;
-    if (editIdx === 'new') {
-      next = [...cps, { ...cpForm }];
-    } else {
-      next = cps.map((cp, i) => i === editIdx ? { ...cpForm } : cp);
-    }
+    const next = editIdx === 'new'
+      ? [...cps, { ...cpForm }]
+      : cps.map((cp, i) => i === editIdx ? { ...cpForm } : cp);
     set('checkPoints', next);
     cancelForm();
   };
@@ -105,7 +121,6 @@ function FixtureImageSection({ draft, set }) {
   };
 
   const setF = (k, v) => setCpForm(f => ({ ...f, [k]: v }));
-
   const pinColors = [c.hi, '#1d4ed8', c.ok, '#7c3aed', c.ng, c.amber, '#0891b2', '#c026d3'];
   const pinColor  = (i) => pinColors[i % pinColors.length];
 
@@ -114,97 +129,58 @@ function FixtureImageSection({ draft, set }) {
       <div className="kicker" style={{ color:c.hi, marginBottom:12 }}>
         FIXTURE IMAGE &amp; CHECK POINTS · ภาพ Fixture และจุดตรวจ
       </div>
-
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, alignItems:'start' }}>
 
-        {/* ── Left: image canvas ─────────────────────────────── */}
+        {/* Left: image canvas */}
         <div>
-          {/* Upload bar */}
-          <div style={{ display:'flex', gap:8, marginBottom:8, alignItems:'center' }}>
-            <label style={{
-              padding:'5px 12px', background:c.ink, color:c.hi,
-              fontFamily:'JetBrains Mono', fontSize:10, fontWeight:700, cursor:'pointer',
-            }}>
+          <div style={{ display:'flex', gap:8, marginBottom:8, alignItems:'center', flexWrap:'wrap' }}>
+            <label style={{ padding:'5px 12px', background:c.ink, color:c.hi, fontFamily:'JetBrains Mono', fontSize:10, fontWeight:700, cursor:'pointer' }}>
               ↑ UPLOAD IMAGE
               <input type="file" accept="image/*" style={{ display:'none' }} onChange={onFileChange} />
             </label>
             {draft.setupImage && (
-              <button onClick={()=>set('setupImage',null)} style={{
-                padding:'5px 10px', background:'transparent', color:c.ng, border:`1.5px solid ${c.ng}`,
-                fontFamily:'JetBrains Mono', fontSize:10, fontWeight:700, cursor:'pointer',
-              }}>✕ REMOVE</button>
+              <button onClick={()=>set('setupImage',null)} style={{ padding:'5px 10px', background:'transparent', color:c.ng, border:`1.5px solid ${c.ng}`, fontFamily:'JetBrains Mono', fontSize:10, fontWeight:700, cursor:'pointer' }}>✕ REMOVE</button>
             )}
             {draft.setupImage && (
               <button onClick={()=>{ setAddMode(a=>!a); cancelForm(); }} style={{
                 padding:'5px 12px',
                 background: addMode ? c.hi : '#fff',
-                color: addMode ? c.ink : c.ink,
+                color: c.ink,
                 border:`1.5px solid ${addMode ? c.hi : c.ink}`,
                 fontFamily:'JetBrains Mono', fontSize:10, fontWeight:700, cursor:'pointer',
-              }}>{addMode ? '● CLICK IMAGE TO PIN' : '＋ ADD POINT'}</button>
+              }}>{addMode ? '● CLICK TO PIN' : '＋ ADD POINT'}</button>
             )}
           </div>
 
-          {/* Image + pins */}
           {draft.setupImage ? (
-            <div
-              style={{
-                position:'relative', background:c.paper, border:`1.5px solid ${c.line}`,
-                cursor: addMode ? 'crosshair' : 'default', userSelect:'none',
-              }}
-              onClick={onImageClick}
-              ref={imgRef}
-            >
-              <img
-                src={draft.setupImage}
-                alt="fixture"
-                style={{ width:'100%', display:'block', pointerEvents:'none' }}
-              />
-              {/* confirmed pins */}
+            <div style={{ position:'relative', background:c.paper, border:`1.5px solid ${c.line}`, cursor:addMode?'crosshair':'default', userSelect:'none' }}
+              onClick={onImageClick} ref={imgRef}>
+              <img src={draft.setupImage} alt="fixture" style={{ width:'100%', display:'block', pointerEvents:'none' }} />
               {cps.map((cp, i) => (
-                <div key={cp.id} onClick={e => onPinClick(e, i)} style={{
-                  position:'absolute',
-                  left: `calc(${cp.x*100}% - 12px)`,
-                  top:  `calc(${cp.y*100}% - 12px)`,
-                  width:24, height:24, borderRadius:'50%',
-                  background: pinColor(i), color:'#fff',
+                <div key={cp.id} onClick={e=>onPinClick(e,i)} style={{
+                  position:'absolute', left:`calc(${cp.x*100}% - 12px)`, top:`calc(${cp.y*100}% - 12px)`,
+                  width:24, height:24, borderRadius:'50%', background:pinColor(i), color:'#fff',
                   display:'flex', alignItems:'center', justifyContent:'center',
                   fontFamily:'JetBrains Mono', fontSize:9, fontWeight:700,
-                  border:`2px solid #fff`,
-                  boxShadow:'0 1px 4px rgba(0,0,0,0.5)',
-                  cursor:'pointer', zIndex:2,
-                  outline: editIdx===i ? `3px solid ${c.ink}` : 'none',
-                }}>
-                  {i+1}
-                </div>
+                  border:'2px solid #fff', boxShadow:'0 1px 4px rgba(0,0,0,0.5)',
+                  cursor:'pointer', zIndex:2, outline:editIdx===i?`3px solid ${c.ink}`:'none',
+                }}>{i+1}</div>
               ))}
-              {/* pending pin (placed but not yet saved) */}
               {pending && (
                 <div style={{
-                  position:'absolute',
-                  left: `calc(${pending.x*100}% - 12px)`,
-                  top:  `calc(${pending.y*100}% - 12px)`,
-                  width:24, height:24, borderRadius:'50%',
-                  background:'#fff', border:`2px dashed ${c.ink}`,
+                  position:'absolute', left:`calc(${pending.x*100}% - 12px)`, top:`calc(${pending.y*100}% - 12px)`,
+                  width:24, height:24, borderRadius:'50%', background:'#fff', border:`2px dashed ${c.ink}`,
                   display:'flex', alignItems:'center', justifyContent:'center',
                   fontFamily:'JetBrains Mono', fontSize:9, fontWeight:700, color:c.ink,
                   boxShadow:'0 1px 4px rgba(0,0,0,0.4)', zIndex:3,
                 }}>?</div>
               )}
               {addMode && (
-                <div style={{
-                  position:'absolute', bottom:6, left:'50%', transform:'translateX(-50%)',
-                  padding:'3px 10px', background:'rgba(0,0,0,0.65)', color:c.hi,
-                  fontFamily:'JetBrains Mono', fontSize:9, fontWeight:700, pointerEvents:'none',
-                }}>คลิกเพื่อวางจุดตรวจ</div>
+                <div style={{ position:'absolute', bottom:6, left:'50%', transform:'translateX(-50%)', padding:'3px 10px', background:'rgba(0,0,0,0.65)', color:c.hi, fontFamily:'JetBrains Mono', fontSize:9, fontWeight:700, pointerEvents:'none' }}>คลิกเพื่อวางจุดตรวจ</div>
               )}
             </div>
           ) : (
-            <label style={{
-              display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-              height:180, background:c.paper, border:`2px dashed ${c.line}`, cursor:'pointer',
-              color:c.steel, fontFamily:'JetBrains Mono', fontSize:10, gap:8,
-            }}>
+            <label style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:180, background:c.paper, border:`2px dashed ${c.line}`, cursor:'pointer', color:c.steel, fontFamily:'JetBrains Mono', fontSize:10, gap:8 }}>
               <span style={{ fontSize:32 }}>🖼</span>
               <span>UPLOAD FIXTURE IMAGE</span>
               <span style={{ fontSize:9, color:c.line }}>JPG / PNG / WEBP</span>
@@ -213,13 +189,10 @@ function FixtureImageSection({ draft, set }) {
           )}
         </div>
 
-        {/* ── Right: check-point list + form ─────────────────── */}
+        {/* Right: check-point list + form */}
         <div>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-            <div className="kicker">CHECK POINTS · จุดตรวจ ({cps.length})</div>
-          </div>
+          <div className="kicker" style={{ marginBottom:8 }}>CHECK POINTS · จุดตรวจ ({cps.length})</div>
 
-          {/* Inline form (add new or edit existing) */}
           {cpForm && (
             <div style={{ background:'#fff', border:`2px solid ${c.hi}`, padding:10, marginBottom:10 }}>
               <div className="kicker" style={{ color:c.hi, marginBottom:8 }}>
@@ -247,8 +220,7 @@ function FixtureImageSection({ draft, set }) {
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:6 }}>
                   {[['nom','NOM (mm)'],['min','MIN'],['max','MAX']].map(([k,l])=>(
                     <Field key={k} label={l}>
-                      <input type="number" step="0.01" value={cpForm[k]}
-                        onChange={e=>setF(k,e.target.value)}
+                      <input type="number" step="0.01" value={cpForm[k]} onChange={e=>setF(k,e.target.value)}
                         style={{ width:'100%', padding:'5px 6px', border:`1.5px solid ${c.hi}`, fontFamily:'JetBrains Mono', fontSize:11, boxSizing:'border-box' }} />
                     </Field>
                   ))}
@@ -266,7 +238,6 @@ function FixtureImageSection({ draft, set }) {
             </div>
           )}
 
-          {/* List */}
           {cps.length === 0 && !cpForm && (
             <div style={{ padding:20, textAlign:'center', color:c.line, fontFamily:'JetBrains Mono', fontSize:10, border:`1px dashed ${c.line}` }}>
               {draft.setupImage ? 'กด ＋ ADD POINT แล้วคลิกบนรูป' : 'Upload รูปก่อนเพื่อวางจุดตรวจ'}
@@ -280,26 +251,16 @@ function FixtureImageSection({ draft, set }) {
               border:`1.5px solid ${editIdx===i ? c.hi : c.line}`,
               cursor:'pointer',
             }} onClick={()=>{ setEditIdx(i); setCpForm({...cp}); setPending(null); }}>
-              <div style={{
-                width:22, height:22, borderRadius:'50%', flexShrink:0,
-                background:pinColor(i), color:'#fff',
-                display:'flex', alignItems:'center', justifyContent:'center',
-                fontFamily:'JetBrains Mono', fontSize:9, fontWeight:700,
-              }}>{i+1}</div>
+              <div style={{ width:22, height:22, borderRadius:'50%', flexShrink:0, background:pinColor(i), color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'JetBrains Mono', fontSize:9, fontWeight:700 }}>{i+1}</div>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontWeight:700, fontSize:12 }}>{cp.label || <span style={{ color:c.line }}>—</span>}</div>
                 {cp.type==='dimension' ? (
-                  <div className="mono" style={{ fontSize:9, color:c.steel, marginTop:1 }}>
-                    📐 {cp.nom||'?'} mm · {cp.min||'?'}–{cp.max||'?'}
-                  </div>
+                  <div className="mono" style={{ fontSize:9, color:c.steel, marginTop:1 }}>📐 {cp.nom||'?'} mm · {cp.min||'?'}–{cp.max||'?'}</div>
                 ) : (
                   <div className="mono" style={{ fontSize:9, color:c.ok, marginTop:1 }}>✓ OK / NG</div>
                 )}
               </div>
-              <button onClick={e=>{ e.stopPropagation(); deletePin(i); }} style={{
-                padding:'2px 7px', background:'transparent', color:c.ng, border:`1px solid ${c.ng}`,
-                fontFamily:'JetBrains Mono', fontSize:9, fontWeight:700, cursor:'pointer', flexShrink:0,
-              }}>✕</button>
+              <button onClick={e=>{ e.stopPropagation(); deletePin(i); }} style={{ padding:'2px 7px', background:'transparent', color:c.ng, border:`1px solid ${c.ng}`, fontFamily:'JetBrains Mono', fontSize:9, fontWeight:700, cursor:'pointer', flexShrink:0 }}>✕</button>
             </div>
           ))}
         </div>
@@ -311,13 +272,27 @@ function FixtureImageSection({ draft, set }) {
 /* ═══════════════════════════════════════════════════════════════ */
 
 export default function JigSetupScreen({ jigList, onBack }) {
-  const [setup, setSetup]       = useState(loadSetup);
-  const [filter, setFilter]     = useState('all');
-  const [search, setSearch]     = useState('');
-  const [expandedId, setExpId]  = useState(null);
-  const [draft, setDraft]       = useState(null);
+  const [setup,      setSetup]     = useState(loadSetup);
+  const [filter,     setFilter]    = useState('all');
+  const [search,     setSearch]    = useState('');
+  const [expandedId, setExpId]     = useState(null);
+  const [draft,      setDraft]     = useState(null);
+  const [apiStatus,  setApiStatus] = useState(null);  // null | 'saving' | 'saved' | 'error'
+  const [apiMode,    setApiMode]   = useState(hasApi() ? 'sql' : 'local');
+  const importRef = useRef(null);
 
   const roster = getRoster();
+
+  /* — load from API on mount (merges over localStorage) — */
+  useEffect(() => {
+    if (!hasApi()) return;
+    apiLoadAll()
+      .then(apiData => {
+        setSetup(local => ({ ...local, ...apiData }));
+        setApiMode('sql');
+      })
+      .catch(() => setApiMode('local'));
+  }, []);
 
   const enriched = jigList.map(j => ({
     ...j,
@@ -335,9 +310,9 @@ export default function JigSetupScreen({ jigList, onBack }) {
     return true;
   });
 
-  const activeCount   = enriched.filter(j => j.activeStatus).length;
-  const inactiveCount = enriched.length - activeCount;
-  const modelCount    = new Set(enriched.map(j => j.model)).size;
+  const activeCount   = enriched.filter(j =>  j.activeStatus).length;
+  const inactiveCount = enriched.filter(j => !j.activeStatus).length;
+  const setupCount    = enriched.filter(j =>  setup[j.id]).length;
 
   const startEdit = (j) => {
     if (expandedId === j.id) { setExpId(null); setDraft(null); return; }
@@ -358,25 +333,94 @@ export default function JigSetupScreen({ jigList, onBack }) {
     });
   };
 
-  const doSave = (jigId) => {
-    const next = { ...setup, [jigId]: { ...draft } };
-    setSetup(next); saveSetup(next);
+  /* — SAVE (localStorage + API) — */
+  const doSave = async (jigId) => {
+    const payload = { ...draft, jigId, updatedAt: Date.now() };
+    const next = { ...setup, [jigId]: payload };
+    setSetup(next);
+    saveSetupLocal(next);
     setExpId(null); setDraft(null);
+
+    if (hasApi()) {
+      setApiStatus('saving');
+      try {
+        await apiSave(jigId, payload);
+        setApiStatus('saved');
+      } catch (_) {
+        setApiStatus('error');
+      }
+      setTimeout(() => setApiStatus(null), 3000);
+    }
+  };
+
+  /* — DELETE (clear setup data for a jig) — */
+  const doDelete = async (jigId, jigName) => {
+    if (!confirm(`รีเซ็ตข้อมูล 4M ของ ${jigId} · ${jigName}?\n\nข้อมูลที่กรอกไว้ทั้งหมด (S/N, รูป, จุดตรวจ) จะถูกลบ`)) return;
+    const next = { ...setup };
+    delete next[jigId];
+    setSetup(next);
+    saveSetupLocal(next);
+    if (expandedId === jigId) { setExpId(null); setDraft(null); }
+
+    if (hasApi()) {
+      setApiStatus('saving');
+      try {
+        await apiDelete(jigId);
+        setApiStatus('saved');
+      } catch (_) {
+        setApiStatus('error');
+      }
+      setTimeout(() => setApiStatus(null), 3000);
+    }
   };
 
   const cancel = () => { setExpId(null); setDraft(null); };
-  const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
+  const set    = (k, v) => setDraft(d => ({ ...d, [k]: v }));
 
+  /* — EXPORT JSON — */
   const exportSetup = () => {
     const out = enriched.map(j => {
       const s = { ...(setup[j.id]||{}) };
-      delete s.setupImage; // omit binary data from export
+      delete s.setupImage;
       return { id:j.id, name:j.name, ...s };
     });
     const blob = new Blob([JSON.stringify(out, null, 2)], { type:'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href=url; a.download='jig-4m-setup.json'; a.click();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'jig-4m-setup.json'; a.click();
     URL.revokeObjectURL(url);
+  };
+
+  /* — IMPORT JSON — */
+  const onImport = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const arr = JSON.parse(ev.target.result);
+        if (!Array.isArray(arr)) throw new Error('invalid');
+        const next = { ...setup };
+        for (const item of arr) {
+          if (item.id) next[item.id] = { ...next[item.id], ...item };
+        }
+        setSetup(next);
+        saveSetupLocal(next);
+        if (hasApi()) {
+          setApiStatus('saving');
+          try {
+            await Promise.all(arr.filter(i=>i.id).map(i => apiSave(i.id, i)));
+            setApiStatus('saved');
+          } catch (_) { setApiStatus('error'); }
+          setTimeout(() => setApiStatus(null), 3000);
+        }
+        alert(`นำเข้าสำเร็จ · ${arr.length} รายการ`);
+      } catch (_) {
+        alert('ไฟล์ไม่ถูกต้อง — ต้องเป็น JSON array');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   return (
@@ -389,7 +433,19 @@ export default function JigSetupScreen({ jigList, onBack }) {
           <div className="kicker" style={{ color:c.hi }}>JIG SETUP · 4M MANAGEMENT · LINE 061</div>
           <div style={{ fontSize:18, fontWeight:700 }}>Jig Master Register · ทะเบียนจิ๊ก</div>
         </div>
-        <div style={{ display:'flex', gap:8 }}>
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          {/* API status badge */}
+          {apiStatus === 'saving' && <span style={{ fontFamily:'JetBrains Mono', fontSize:9, color:c.amber }}>⏳ SAVING...</span>}
+          {apiStatus === 'saved'  && <span style={{ fontFamily:'JetBrains Mono', fontSize:9, color:c.ok   }}>✓ SAVED</span>}
+          {apiStatus === 'error'  && <span style={{ fontFamily:'JetBrains Mono', fontSize:9, color:c.ng   }}>⚠ SAVE FAILED</span>}
+          {/* Backend mode pill */}
+          <span style={{ fontFamily:'JetBrains Mono', fontSize:9, padding:'2px 8px', border:`1px solid ${apiMode==='sql'?c.ok:c.line}`, color:apiMode==='sql'?c.ok:c.steel }}>
+            {apiMode==='sql' ? '● SQL' : '○ LOCAL'}
+          </span>
+          <label style={{ padding:'6px 12px', background:'transparent', color:c.amber, border:`1.5px solid ${c.amber}`, fontSize:11, fontWeight:700, cursor:'pointer' }}>
+            ↑ IMPORT
+            <input ref={importRef} type="file" accept=".json,application/json" style={{ display:'none' }} onChange={onImport} />
+          </label>
           <button onClick={exportSetup} style={{ padding:'6px 12px', background:'transparent', color:c.hi, border:`1.5px solid ${c.hi}`, fontSize:11, fontWeight:700, cursor:'pointer' }}>↓ EXPORT</button>
           <button onClick={onBack}      style={{ padding:'6px 12px', background:'transparent', color:'#fff', border:'1.5px solid #fff', fontSize:11, fontWeight:700, cursor:'pointer' }}>← BACK</button>
         </div>
@@ -399,10 +455,10 @@ export default function JigSetupScreen({ jigList, onBack }) {
 
         {/* KPI tiles */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:16 }}>
-          <KPI label="TOTAL JIGS" sub="จิ๊กทั้งหมด"  value={enriched.length} accent={c.ink} />
-          <KPI label="ACTIVE"     sub="ใช้งาน"        value={activeCount}     accent={c.ok} />
-          <KPI label="INACTIVE"   sub="พักใช้งาน"     value={inactiveCount}   accent={c.steel} />
-          <KPI label="MODELS"     sub="รุ่นรถ"         value={modelCount}      accent={c.hi} />
+          <KPI label="TOTAL JIGS"   sub="จิ๊กทั้งหมด"       value={enriched.length} accent={c.ink} />
+          <KPI label="ACTIVE"       sub="ใช้งาน"             value={activeCount}     accent={c.ok} />
+          <KPI label="INACTIVE"     sub="พักใช้งาน"          value={inactiveCount}   accent={c.steel} />
+          <KPI label="4M COMPLETE"  sub="กรอกข้อมูลแล้ว"    value={`${setupCount} / ${enriched.length}`} accent={c.hi} />
         </div>
 
         {/* Filter + Search */}
@@ -414,11 +470,9 @@ export default function JigSetupScreen({ jigList, onBack }) {
               fontFamily:'JetBrains Mono', fontSize:11, fontWeight:700, cursor:'pointer',
             }}>{l}</button>
           ))}
-          <input
-            value={search} onChange={e=>setSearch(e.target.value)}
+          <input value={search} onChange={e=>setSearch(e.target.value)}
             placeholder="ค้นหา JIG ID / ชื่อ / Part No..."
-            style={{ flex:1, maxWidth:320, padding:'6px 10px', border:`1.5px solid ${c.line}`, fontFamily:'JetBrains Mono', fontSize:11 }}
-          />
+            style={{ flex:1, maxWidth:320, padding:'6px 10px', border:`1.5px solid ${c.line}`, fontFamily:'JetBrains Mono', fontSize:11 }} />
           <span style={{ marginLeft:'auto', fontFamily:'JetBrains Mono', fontSize:10, color:c.steel }}>
             {filtered.length} / {enriched.length}
           </span>
@@ -429,7 +483,7 @@ export default function JigSetupScreen({ jigList, onBack }) {
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
             <thead>
               <tr style={{ background:c.paper, borderBottom:`1.5px solid ${c.ink}` }}>
-                {['JIG ID','NAME · ชื่อ','PROCESS','PART NO','S/N','LOCATION','PM CYCLE','STATUS','4M SETUP'].map(h => (
+                {['JIG ID','NAME · ชื่อ','PROCESS','PART NO','S/N','LOCATION','PM CYCLE','STATUS','4M SETUP',''].map(h => (
                   <th key={h} className="kicker" style={{ padding:'8px 10px', textAlign:'left', whiteSpace:'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -437,8 +491,11 @@ export default function JigSetupScreen({ jigList, onBack }) {
             <tbody>
               {filtered.flatMap(j => {
                 const isExpanded = expandedId === j.id;
+                const hasSetup   = Boolean(setup[j.id]);
                 const counts     = sectionCounts(j);
                 const countStr   = [counts.LP&&`LP×${counts.LP}`, counts.SD&&`SD×${counts.SD}`, counts.AC&&`AC×${counts.AC}`, counts.PS&&`PS×${counts.PS}`].filter(Boolean).join('  ');
+                const cpCount    = (setup[j.id]?.checkPoints||[]).length;
+
                 const rows = [
                   <tr key={j.id} style={{
                     borderBottom: isExpanded ? `2px solid ${c.hi}` : `1px solid ${c.line}`,
@@ -447,31 +504,43 @@ export default function JigSetupScreen({ jigList, onBack }) {
                     <td className="mono" style={{ padding:'10px', fontWeight:700 }}>{j.id}</td>
                     <td style={{ padding:'10px' }}>
                       <div style={{ fontWeight:600, fontSize:12 }}>{j.name}</div>
-                      <div className="mono" style={{ fontSize:9, color:c.steel, marginTop:1 }}>{countStr}</div>
+                      <div className="mono" style={{ fontSize:9, color:c.steel, marginTop:1 }}>
+                        {countStr}{cpCount ? ` · 📐×${cpCount}` : ''}
+                      </div>
                     </td>
                     <td className="mono" style={{ padding:'10px', fontSize:10, color:c.steel }}>{j.process}</td>
                     <td className="mono" style={{ padding:'10px', fontSize:10 }}>{j.partNo||'—'}</td>
-                    <td className="mono" style={{ padding:'10px', fontSize:10, color: j.sn ? c.ink : c.line }}>{j.sn||'—'}</td>
+                    <td className="mono" style={{ padding:'10px', fontSize:10, color:j.sn?c.ink:c.line }}>{j.sn||'—'}</td>
                     <td className="mono" style={{ padding:'10px', fontSize:10 }}>
                       {j.location||'—'}{j.station && <span style={{ color:c.steel }}> / {j.station}</span>}
                     </td>
-                    <td className="mono" style={{ padding:'10px', fontWeight:700 }}>
-                      {j.pmInterval ? `${j.pmInterval}D` : '—'}
-                    </td>
+                    <td className="mono" style={{ padding:'10px', fontWeight:700 }}>{j.pmInterval ? `${j.pmInterval}D` : '—'}</td>
                     <td style={{ padding:'10px' }}>
                       <span className="pill-v2" style={{
-                        color:        j.activeStatus ? c.ok    : c.steel,
-                        borderColor:  j.activeStatus ? c.ok    : c.line,
-                        background:   j.activeStatus ? '#e7f3e8' : c.paper,
+                        color:       j.activeStatus ? c.ok    : c.steel,
+                        borderColor: j.activeStatus ? c.ok    : c.line,
+                        background:  j.activeStatus ? '#e7f3e8' : c.paper,
                       }}>{j.activeStatus ? 'ACTIVE' : 'INACTIVE'}</span>
                     </td>
                     <td style={{ padding:'8px 10px' }}>
-                      <button onClick={()=>startEdit(j)} style={{
-                        padding:'4px 10px',
-                        background: isExpanded ? c.hi : 'transparent',
-                        border:`1.5px solid ${isExpanded ? c.hi : c.ink}`,
-                        fontFamily:'JetBrains Mono', fontSize:10, fontWeight:700, cursor:'pointer',
-                      }}>{isExpanded ? '▲ CLOSE' : '▼ EDIT 4M'}</button>
+                      <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+                        {hasSetup && <span style={{ fontFamily:'JetBrains Mono', fontSize:8, color:c.ok }}>✓</span>}
+                        <button onClick={()=>startEdit(j)} style={{
+                          padding:'4px 10px',
+                          background: isExpanded ? c.hi : 'transparent',
+                          border:`1.5px solid ${isExpanded ? c.hi : c.ink}`,
+                          fontFamily:'JetBrains Mono', fontSize:10, fontWeight:700, cursor:'pointer',
+                        }}>{isExpanded ? '▲ CLOSE' : '▼ EDIT 4M'}</button>
+                      </div>
+                    </td>
+                    {/* DELETE column */}
+                    <td style={{ padding:'8px 6px' }}>
+                      {hasSetup && (
+                        <button onClick={()=>doDelete(j.id, j.name)} title="รีเซ็ตข้อมูล 4M" style={{
+                          padding:'4px 8px', background:'transparent', color:c.ng,
+                          border:`1.5px solid ${c.ng}`, fontFamily:'JetBrains Mono', fontSize:10, fontWeight:700, cursor:'pointer',
+                        }}>🗑</button>
+                      )}
                     </td>
                   </tr>,
                 ];
@@ -483,15 +552,21 @@ export default function JigSetupScreen({ jigList, onBack }) {
 
                   rows.push(
                     <tr key={`${j.id}-4m`} style={{ borderBottom:`1px solid ${c.line}` }}>
-                      <td colSpan={9} style={{ padding:0 }}>
+                      <td colSpan={10} style={{ padding:0 }}>
                         <div style={{ padding:16, background:'#fff8f5', borderTop:`3px solid ${c.hi}` }}>
-                          <div className="kicker" style={{ color:c.hi, marginBottom:14 }}>4M SETUP · {j.id} — {j.name}</div>
+                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+                            <div className="kicker" style={{ color:c.hi }}>4M SETUP · {j.id} — {j.name}</div>
+                            {setup[j.id]?.updatedAt && (
+                              <div style={{ fontFamily:'JetBrains Mono', fontSize:9, color:c.steel }}>
+                                LAST SAVED · {new Date(setup[j.id].updatedAt).toLocaleString('th-TH')}
+                              </div>
+                            )}
+                          </div>
 
-                          {/* 4M grid */}
                           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:14, marginBottom:16 }}>
 
-                            {/* ① MAN */}
-                            <MCard title="MAN · คน" accent="#1d4ed8" bg="#eff6ff">
+                            {/* MAN */}
+                            <MCard title="① MAN · คน" accent="#1d4ed8" bg="#eff6ff">
                               <Field label="RESPONSIBLE · ผู้รับผิดชอบ">
                                 <select value={draft.responsible} onChange={e=>set('responsible',e.target.value)} style={selStyle}>
                                   <option value="">— ยังไม่ระบุ —</option>
@@ -512,19 +587,16 @@ export default function JigSetupScreen({ jigList, onBack }) {
                               )}
                             </MCard>
 
-                            {/* ② MACHINE */}
-                            <MCard title="MACHINE · เครื่อง" accent={c.hi} bg="#fff8f5">
+                            {/* MACHINE */}
+                            <MCard title="② MACHINE · เครื่อง" accent={c.hi} bg="#fff8f5">
                               <Field label="SERIAL No.">
-                                <input value={draft.sn} placeholder="JIG-SN-XXXXX"
-                                  onChange={e=>set('sn',e.target.value)} style={inpStyle} />
+                                <input value={draft.sn} placeholder="JIG-SN-XXXXX" onChange={e=>set('sn',e.target.value)} style={inpStyle} />
                               </Field>
                               <Field label="LOCATION">
-                                <input value={draft.location} placeholder="LINE 061 / BAY-A"
-                                  onChange={e=>set('location',e.target.value)} style={inpStyle} />
+                                <input value={draft.location} placeholder="LINE 061 / BAY-A" onChange={e=>set('location',e.target.value)} style={inpStyle} />
                               </Field>
                               <Field label="STATION">
-                                <input value={draft.station} placeholder="ST-01"
-                                  onChange={e=>set('station',e.target.value)} style={inpStyle} />
+                                <input value={draft.station} placeholder="ST-01" onChange={e=>set('station',e.target.value)} style={inpStyle} />
                               </Field>
                               <Field label="STATUS">
                                 <div style={{ display:'flex', gap:6 }}>
@@ -539,51 +611,48 @@ export default function JigSetupScreen({ jigList, onBack }) {
                                   ))}
                                 </div>
                               </Field>
-                              {countStr && (
-                                <div style={{ marginTop:6, padding:'4px 6px', background:'rgba(0,0,0,0.04)', fontSize:9, fontFamily:'JetBrains Mono', color:c.steel }}>
-                                  {countStr}
-                                </div>
-                              )}
                             </MCard>
 
-                            {/* ③ MATERIAL */}
-                            <MCard title="MATERIAL · วัสดุ" accent={c.ok} bg="#f0fdf4">
+                            {/* MATERIAL */}
+                            <MCard title="③ MATERIAL · วัสดุ" accent={c.ok} bg="#f0fdf4">
                               <InfoRow label="PART NAME">{j.partName||'—'}</InfoRow>
                               <InfoRow label="PART No.">{j.partNo||'—'}</InfoRow>
                               <InfoRow label="MODEL">{j.model||'—'}</InfoRow>
                               <InfoRow label="PROCESS">{j.process||'—'}</InfoRow>
-                              <div style={{ marginTop:8, fontSize:9, color:c.steel, fontFamily:'JetBrains Mono' }}>
-                                Read-only · ข้อมูลจาก JIG Master
-                              </div>
+                              <div style={{ marginTop:8, fontSize:9, color:c.steel, fontFamily:'JetBrains Mono' }}>Read-only · จาก JIG Master</div>
                             </MCard>
 
-                            {/* ④ METHOD */}
-                            <MCard title="METHOD · วิธีการ" accent={c.amber} bg="#fffbeb">
+                            {/* METHOD */}
+                            <MCard title="④ METHOD · วิธีการ" accent={c.amber} bg="#fffbeb">
                               <Field label="PM INTERVAL (DAYS) · รอบ PM">
                                 <input type="number" min={1} value={draft.pmInterval}
                                   onChange={e=>set('pmInterval', Math.max(1, parseInt(e.target.value)||1))}
                                   style={{ ...inpStyle, fontFamily:'JetBrains Mono', fontSize:13, fontWeight:700 }} />
                               </Field>
                               <Field label="REF. DOC · เอกสารอ้างอิง">
-                                <input value={draft.refDoc} placeholder="WI-JIG-XXX"
-                                  onChange={e=>set('refDoc',e.target.value)} style={inpStyle} />
+                                <input value={draft.refDoc} placeholder="WI-JIG-XXX" onChange={e=>set('refDoc',e.target.value)} style={inpStyle} />
                               </Field>
                               <Field label="SETUP NOTES · หมายเหตุ">
-                                <textarea value={draft.setupNote} rows={3}
-                                  placeholder="ขั้นตอน / ข้อควรระวัง..."
+                                <textarea value={draft.setupNote} rows={3} placeholder="ขั้นตอน / ข้อควรระวัง..."
                                   onChange={e=>set('setupNote',e.target.value)}
                                   style={{ ...inpStyle, fontFamily:'Sarabun, system-ui', resize:'vertical' }} />
                               </Field>
                             </MCard>
                           </div>
 
-                          {/* ⑤ Fixture image + check points */}
+                          {/* Fixture image + check points */}
                           <FixtureImageSection draft={draft} set={set} />
 
                           {/* Action buttons */}
-                          <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:16 }}>
-                            <button onClick={cancel} style={{ padding:'8px 16px', background:'#fff', color:c.steel, border:`1.5px solid ${c.line}`, fontFamily:'JetBrains Mono', fontSize:11, fontWeight:700, cursor:'pointer' }}>× CANCEL</button>
-                            <button onClick={()=>doSave(j.id)} style={{ padding:'8px 20px', background:c.ok, color:'#fff', border:'none', fontFamily:'JetBrains Mono', fontSize:11, fontWeight:700, cursor:'pointer' }}>✓ SAVE 4M DATA</button>
+                          <div style={{ display:'flex', gap:8, justifyContent:'space-between', marginTop:16, alignItems:'center' }}>
+                            <button onClick={()=>doDelete(j.id, j.name)} style={{
+                              padding:'8px 16px', background:'transparent', color:c.ng,
+                              border:`1.5px solid ${c.ng}`, fontFamily:'JetBrains Mono', fontSize:11, fontWeight:700, cursor:'pointer',
+                            }}>🗑 RESET 4M DATA</button>
+                            <div style={{ display:'flex', gap:8 }}>
+                              <button onClick={cancel} style={{ padding:'8px 16px', background:'#fff', color:c.steel, border:`1.5px solid ${c.line}`, fontFamily:'JetBrains Mono', fontSize:11, fontWeight:700, cursor:'pointer' }}>× CANCEL</button>
+                              <button onClick={()=>doSave(j.id)} style={{ padding:'8px 24px', background:c.ok, color:'#fff', border:'none', fontFamily:'JetBrains Mono', fontSize:11, fontWeight:700, cursor:'pointer' }}>✓ SAVE 4M DATA</button>
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -594,19 +663,27 @@ export default function JigSetupScreen({ jigList, onBack }) {
               })}
             </tbody>
           </table>
+
+          {filtered.length === 0 && (
+            <div style={{ padding:40, textAlign:'center', color:c.steel, fontFamily:'JetBrains Mono', fontSize:11 }}>
+              ไม่พบจิ๊กที่ตรงกับเงื่อนไข
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
+/* ── shared style objects ──────────────────────────────────────── */
 const inpStyle = { width:'100%', padding:'5px 7px', border:`1.5px solid #ff6a00`, fontSize:11, boxSizing:'border-box' };
 const selStyle = { width:'100%', padding:'5px 7px', border:`1.5px solid #ff6a00`, fontSize:11, boxSizing:'border-box' };
 
+/* ── sub-components ────────────────────────────────────────────── */
 const KPI = ({ label, sub, value, accent }) => (
   <div style={{ background:'#fff', border:`1px solid #d8d4cc`, borderLeft:`3px solid ${accent}`, padding:'14px 16px' }}>
     <div className="kicker">{label}</div>
-    <div className="mono" style={{ fontSize:30, fontWeight:700, lineHeight:1, marginTop:4 }}>{value}</div>
+    <div className="mono" style={{ fontSize:28, fontWeight:700, lineHeight:1, marginTop:4 }}>{value}</div>
     <div className="thai" style={{ fontSize:11, color:'#6b6b6b', marginTop:4 }}>{sub}</div>
   </div>
 );
