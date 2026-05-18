@@ -1,54 +1,91 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const c = { ink:'#0d0d0d', hi:'#ff6a00', paper:'#f4f1ea', line:'#d8d4cc', ng:'#c8201d', ok:'#2f7d32', steel:'#6b6b6b', amber:'#ffb000' };
 
 const CAL_KEY = 'pm_jig_cal_v2';
+const SQL_API_URL = (import.meta.env.VITE_SQL_API_URL || '').replace(/\/$/, '');
 
 const DEFAULT_TOOLS = [
-  { id:'TRQ-0214', name:'Torque Wrench 40-200 N·m', th:'ประแจวัดแรงบิด', cat:'TORQUE', loc:'BAY-A 12', interval:180, lastCal:offsetDate(-2), sn:'SK-TW-0214' },
+  { id:'TRQ-0214', name:'Torque Wrench 40-200 N·m', th:'ประแจวัดแรงบิด', cat:'TORQUE',  loc:'BAY-A 12', interval:180, lastCal:offsetDate(-2),   sn:'SK-TW-0214' },
   { id:'CAL-0089', name:'Vernier Caliper 200mm',     th:'เวอร์เนีย 200มม',  cat:'MEASURE', loc:'BAY-A 04', interval:365, lastCal:offsetDate(-310), sn:'MTY-VC-0089' },
   { id:'MIC-0033', name:'Micrometer 0-25mm',         th:'ไมโครมิเตอร์',     cat:'MEASURE', loc:'BAY-A 05', interval:365, lastCal:offsetDate(-380), sn:'MTY-MM-0033' },
-  { id:'GAU-0042', name:'Feeler Gauge Set',          th:'ฟิลเลอร์เกจ',      cat:'MEASURE', loc:'BAY-A 06', interval:365, lastCal:offsetDate(-15), sn:'STA-FG-0042' },
-  { id:'IMP-0061', name:'Impact Wrench 1/2"',        th:'ประแจลม',          cat:'POWER',   loc:'BAY-C 15', interval:730, lastCal:offsetDate(-100), sn:'CHI-IW-0061' },
-  { id:'DRL-0117', name:'Cordless Drill 18V',        th:'สว่านไร้สาย',       cat:'POWER',   loc:'BAY-C 21', interval:730, lastCal:offsetDate(-200), sn:'MAK-CD-0117' },
+  { id:'GAU-0042', name:'Feeler Gauge Set',           th:'ฟิลเลอร์เกจ',      cat:'MEASURE', loc:'BAY-A 06', interval:365, lastCal:offsetDate(-15),  sn:'STA-FG-0042' },
+  { id:'IMP-0061', name:'Impact Wrench 1/2"',         th:'ประแจลม',          cat:'POWER',   loc:'BAY-C 15', interval:730, lastCal:offsetDate(-100), sn:'CHI-IW-0061' },
+  { id:'DRL-0117', name:'Cordless Drill 18V',         th:'สว่านไร้สาย',       cat:'POWER',   loc:'BAY-C 21', interval:730, lastCal:offsetDate(-200), sn:'MAK-CD-0117' },
 ];
 
 function offsetDate(d) {
   const date = new Date(); date.setDate(date.getDate() + d);
-  return date.toISOString().slice(0,10);
+  return date.toISOString().slice(0, 10);
 }
 function daysUntil(date, intervalDays) {
-  const last = new Date(date+'T00:00:00').getTime();
-  const due = last + intervalDays*86400000;
+  const last = new Date(date + 'T00:00:00').getTime();
+  const due  = last + intervalDays * 86400000;
   return Math.floor((due - Date.now()) / 86400000);
 }
 
-function loadTools() {
-  try { const s = localStorage.getItem(CAL_KEY); if (s) return JSON.parse(s); } catch(_) {}
+const hasSql = () => Boolean(SQL_API_URL);
+
+async function apiFetch(path, options = {}) {
+  const r = await fetch(`${SQL_API_URL}${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+  });
+  if (!r.ok) throw new Error(`API ${r.status}`);
+  if (r.status === 204) return null;
+  return r.json();
+}
+
+function loadLocal() {
+  try { const s = localStorage.getItem(CAL_KEY); if (s) return JSON.parse(s); } catch (_) {}
   localStorage.setItem(CAL_KEY, JSON.stringify(DEFAULT_TOOLS));
   return DEFAULT_TOOLS;
 }
-function saveTools(tools) { localStorage.setItem(CAL_KEY, JSON.stringify(tools)); }
+function saveLocal(tools) { localStorage.setItem(CAL_KEY, JSON.stringify(tools)); }
 
 export default function CalibrationScreen({ canEdit, onBack }) {
-  const [tools, setTools] = useState(loadTools());
+  const [tools, setTools] = useState(loadLocal());
   const [filter, setFilter] = useState('all');
+  const [syncing, setSyncing] = useState(false);
+
+  useEffect(() => {
+    if (!hasSql()) return;
+    setSyncing(true);
+    apiFetch('/calibration')
+      .then(rows => {
+        if (rows?.length) {
+          saveLocal(rows); setTools(rows);
+        } else {
+          const local = loadLocal();
+          return apiFetch('/calibration/bulk', { method: 'POST', body: JSON.stringify(local) })
+            .then(synced => { if (synced?.length) { saveLocal(synced); setTools(synced); } });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setSyncing(false));
+  }, []);
 
   const enriched = tools.map(t => {
     const d = daysUntil(t.lastCal, t.interval);
     return { ...t, daysLeft: d, status: d < 0 ? 'overdue' : d < 30 ? 'due' : 'ok' };
   });
 
-  const list = enriched.filter(t => filter==='all' || t.status===filter);
-  const overdue = enriched.filter(t=>t.status==='overdue').length;
-  const due = enriched.filter(t=>t.status==='due').length;
+  const list    = enriched.filter(t => filter === 'all' || t.status === filter);
+  const overdue = enriched.filter(t => t.status === 'overdue').length;
+  const due     = enriched.filter(t => t.status === 'due').length;
 
-  const recordCal = (id) => {
+  const recordCal = async (id) => {
     if (!canEdit) return;
     if (!confirm('บันทึก Calibration วันนี้?')) return;
-    const today = new Date().toISOString().slice(0,10);
-    const next = tools.map(t => t.id===id ? {...t, lastCal: today} : t);
-    setTools(next); saveTools(next);
+    const today = new Date().toISOString().slice(0, 10);
+    const next  = tools.map(t => t.id === id ? { ...t, lastCal: today } : t);
+    saveLocal(next);
+    setTools(next);
+    if (hasSql()) {
+      const tool = next.find(t => t.id === id);
+      try { await apiFetch(`/calibration/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(tool) }); }
+      catch (_) {}
+    }
   };
 
   return (
@@ -58,6 +95,7 @@ export default function CalibrationScreen({ canEdit, onBack }) {
         <div>
           <div className="kicker" style={{ color:c.hi }}>TOOL CALIBRATION · สอบเทียบเครื่องมือ</div>
           <div style={{ fontSize:18, fontWeight:700 }}>Calibration Register</div>
+          {syncing && <div style={{ fontSize:10, color:c.hi }}>⟳ Syncing with MySQL…</div>}
         </div>
         <button onClick={onBack} style={{ padding:'6px 12px', background:'transparent', color:'#fff', border:'1.5px solid #fff', fontSize:11, fontWeight:700, cursor:'pointer' }}>← BACK</button>
       </div>
@@ -65,15 +103,17 @@ export default function CalibrationScreen({ canEdit, onBack }) {
       <div className="screen-pad" style={{ maxWidth:1200, margin:'0 auto' }}>
         <div className="grid-kpi-3">
           <KPI label="OVERDUE" sub="เกินกำหนดสอบเทียบ" value={overdue} accent={c.ng} />
-          <KPI label="DUE 30D" sub="ครบกำหนด 30 วัน" value={due} accent={c.amber} />
-          <KPI label="VALID" sub="พร้อมใช้งาน" value={tools.length-overdue-due} accent={c.ok} />
+          <KPI label="DUE 30D" sub="ครบกำหนด 30 วัน"  value={due}     accent={c.amber} />
+          <KPI label="VALID"   sub="พร้อมใช้งาน"        value={tools.length - overdue - due} accent={c.ok} />
         </div>
 
         <div style={{ display:'flex', gap:6, marginBottom:10 }}>
           {[['all','ALL'],['overdue','OVERDUE'],['due','DUE'],['ok','VALID']].map(([k,l])=>(
             <button key={k} onClick={()=>setFilter(k)} style={{
-              padding:'6px 12px', background: filter===k ? c.ink : '#fff',
-              color: filter===k ? c.hi : c.ink, border:`1.5px solid ${c.ink}`,
+              padding:'6px 12px',
+              background: filter===k ? c.ink : '#fff',
+              color: filter===k ? c.hi : c.ink,
+              border:`1.5px solid ${c.ink}`,
               fontFamily:'JetBrains Mono', fontSize:11, fontWeight:700, cursor:'pointer',
             }}>{l}</button>
           ))}

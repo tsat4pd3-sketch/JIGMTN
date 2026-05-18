@@ -2,9 +2,11 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { ping } from './db.js';
-import recordsRouter  from './routes/records.js';
-import plansRouter    from './routes/plans.js';
-import jigSetupRouter from './routes/jigSetup.js';
+import recordsRouter     from './routes/records.js';
+import plansRouter       from './routes/plans.js';
+import jigSetupRouter    from './routes/jigSetup.js';
+import rosterRouter      from './routes/roster.js';
+import calibrationRouter from './routes/calibration.js';
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -36,9 +38,11 @@ app.get('/health', async (_req, res) => {
   }
 });
 
-app.use('/pm-records', recordsRouter);
-app.use('/pm-plans',   plansRouter);
-app.use('/jig-setup',  jigSetupRouter);
+app.use('/pm-records',   recordsRouter);
+app.use('/pm-plans',     plansRouter);
+app.use('/jig-setup',    jigSetupRouter);
+app.use('/roster',       rosterRouter);
+app.use('/calibration',  calibrationRouter);
 
 // 404 catch-all
 app.use((_req, res) => res.status(404).json({ error: 'not found' }));
