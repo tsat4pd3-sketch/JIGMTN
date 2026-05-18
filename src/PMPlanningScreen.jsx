@@ -57,8 +57,8 @@ export default function PMPlanningScreen({ plans, jigList, session, onBack, onSa
         <button onClick={onBack} style={{ padding:'8px 12px', background:c.hi, color:c.ink, border:'none', fontWeight:800, cursor:'pointer' }}>← HOME</button>
       </div>
 
-      <div style={{ maxWidth:1180, margin:'0 auto', padding:18 }}>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:10, marginBottom:14 }}>
+      <div className="screen-pad" style={{ maxWidth:1180, margin:'0 auto' }}>
+        <div className="grid-kpi-5">
           {[['OPEN', stats.planned + stats.in_progress + stats.overdue], ['OVERDUE', stats.overdue], ['PLANNED', stats.planned], ['DONE', stats.completed], ['TOTAL', stats.total]].map(([label, val]) => (
             <div key={label} style={{ background:'#fff', border:`1px solid ${c.line}`, padding:14 }}>
               <div className="kicker">{label}</div>
@@ -67,7 +67,7 @@ export default function PMPlanningScreen({ plans, jigList, session, onBack, onSa
           ))}
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'360px 1fr', gap:14 }}>
+        <div className="plan-layout">
           <div style={{ background:'#fff', border:`1px solid ${c.line}`, padding:16, alignSelf:'start' }}>
             <div className="kicker" style={{ marginBottom:10 }}>CREATE PM PLAN · แผนใหม่</div>
             <label className="kicker">JIG / FIXTURE</label>
@@ -117,6 +117,7 @@ export default function PMPlanningScreen({ plans, jigList, session, onBack, onSa
                 {['open','overdue','planned','completed','all'].map(f => <button key={f} onClick={()=>setFilter(f)} style={{ ...filterBtn, background: filter===f ? c.hi : '#fff' }}>{f.toUpperCase()}</button>)}
               </div>
             </div>
+            <div className="table-scroll">
             <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
               <thead>
                 <tr style={{ background:c.paper, borderBottom:`1.5px solid ${c.ink}` }}>
@@ -138,6 +139,7 @@ export default function PMPlanningScreen({ plans, jigList, session, onBack, onSa
                 {rows.length === 0 && <tr><td colSpan="6" style={{ padding:34, textAlign:'center', color:c.steel }}>ยังไม่มีแผน PM ในเงื่อนไขนี้</td></tr>}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       </div>

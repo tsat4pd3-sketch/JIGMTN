@@ -130,8 +130,11 @@ export default function MobileHome({ session, jigList, records, plans = [], onLo
       )}
 
       {/* Quick nav row */}
-      <div style={{ padding:'0 12px 8px', display:'flex', gap:6, flexWrap:'wrap' }}>
+      <div className="nav-row" style={{ padding:'0 12px 8px' }}>
         <button onClick={onHistory} style={navBtn(false)}>📋 ประวัติ</button>
+        {['engineer','supervisor','admin'].includes(session?.role) && (
+          <button onClick={()=>onNavigate('analytics')} style={navBtn(false)}>📈 Analytics</button>
+        )}
         {['engineer','supervisor','admin'].includes(session?.role) && (
           <button onClick={()=>onNavigate('dashboard')} style={navBtn(false)}>📊 Dashboard</button>
         )}

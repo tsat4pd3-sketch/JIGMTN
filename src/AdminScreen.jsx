@@ -49,13 +49,14 @@ export default function AdminScreen({ onBack }) {
         <button onClick={onBack} style={{ padding:'6px 12px', background:'transparent', color:'#fff', border:'1.5px solid #fff', fontSize:11, fontWeight:700, cursor:'pointer' }}>← BACK</button>
       </div>
 
-      <div style={{ maxWidth:1100, margin:'0 auto', padding:20 }}>
+      <div className="screen-pad" style={{ maxWidth:1100, margin:'0 auto' }}>
         <div style={{ background:'#fff', border:`1px solid ${c.line}`, padding:16, marginBottom:16 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
             <div className="kicker">USER ROSTER · {roster.length} accounts</div>
             <button onClick={startNew} style={{ padding:'6px 12px', background:c.hi, border:'none', fontFamily:'JetBrains Mono', fontSize:11, fontWeight:700, cursor:'pointer' }}>+ ADD USER</button>
           </div>
 
+          <div className="table-scroll">
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
             <thead>
               <tr style={{ background:c.paper, borderBottom:`1.5px solid ${c.ink}` }}>
@@ -88,6 +89,7 @@ export default function AdminScreen({ onBack }) {
               )}
             </tbody>
           </table>
+          </div>
         </div>
 
         <div style={{ background:'#fff', border:`1px solid ${c.line}`, padding:16 }}>
